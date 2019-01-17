@@ -51,7 +51,7 @@ private:
 	POINT prevMousePos;
 
 	// Store the GameEntity data
-	const int entityCount = 1;
+	const int entityCount = 5;
 	GameEntity** entities;
 };
 
