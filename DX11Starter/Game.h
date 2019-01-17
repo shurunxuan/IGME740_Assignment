@@ -4,6 +4,7 @@
 #include "SimpleShader.h"
 #include <DirectXMath.h>
 #include "Mesh.h"
+#include "GameEntity.h"
 
 class Game 
 	: public DXCore
@@ -49,8 +50,8 @@ private:
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
 
-	// Store the meshes data
-	const int meshCount = 3;
-	Mesh** meshes;
+	// Store the GameEntity data
+	const int entityCount = 3;
+	GameEntity** entities;
 };
 

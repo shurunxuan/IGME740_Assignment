@@ -4,7 +4,7 @@ GameEntity::GameEntity()
 {
 	mesh = nullptr;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f); 
-	scale = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
 	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
 }
@@ -13,7 +13,7 @@ GameEntity::GameEntity(const std::shared_ptr<Mesh> m)
 {
 	mesh = m;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
-	scale = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
 	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
 }
@@ -27,6 +27,9 @@ void GameEntity::UpdateWorldMatrix()
 	const DirectX::XMMATRIX w = s * r * t;
 
 	XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(w));
+
+	shouldUpdate = false;
+	printf("[INFO] WorldMatrix of <%p> Updated.\n", this);
 }
 
 void GameEntity::SetTranslation(const DirectX::XMFLOAT3 t)
@@ -64,8 +67,16 @@ DirectX::XMFLOAT4& GameEntity::GetRotation()
 
 DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrix()
 {
-	if (shouldUpdate) UpdateWorldMatrix();
+	if (shouldUpdate)
+	{
+		UpdateWorldMatrix();
+	}
 	return worldMatrix;
+}
+
+Mesh* GameEntity::GetMesh() const
+{
+	return mesh.get();
 }
 
 void GameEntity::MoveToward(DirectX::XMFLOAT3 direction, const float distance)

@@ -21,6 +21,8 @@ public:
 
 	DirectX::XMFLOAT4X4& GetWorldMatrix();
 
+	Mesh* GetMesh() const;
+
 	void MoveToward(DirectX::XMFLOAT3 direction, float distance);
 	void RotateAxis(DirectX::XMFLOAT3 axis, float radian);
 

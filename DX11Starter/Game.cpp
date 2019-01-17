@@ -51,13 +51,13 @@ Game::~Game()
 	delete vertexShader;
 	delete pixelShader;
 
-	// Delete mesh data
-	for (int i = 0; i < meshCount; ++i)
+	// Delete GameEntity data
+	for (int i = 0; i < entityCount; ++i)
 	{
 		// TODO: Potential Access Violation not handled.
-		delete meshes[i];
+		delete entities[i];
 	}
-	delete[] meshes;
+	delete[] entities;
 }
 
 // --------------------------------------------------------
@@ -151,8 +151,8 @@ void Game::CreateBasicGeometry()
 	XMFLOAT4 yellow = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
 	XMFLOAT4 white = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
-	// Create mesh data
-	meshes = new Mesh*[meshCount];
+	// Create GameEntity data
+	entities = new GameEntity*[entityCount];
 
 	// Create a triangle mesh
 
@@ -173,20 +173,20 @@ void Game::CreateBasicGeometry()
 	// - But just to see how it's done...
 	int indices0[] = { 0, 1, 2 };
 
-	meshes[0] = new Mesh(vertices0, 3, indices0, 3, device);
+	std::shared_ptr<Mesh> meshTri = std::make_shared<Mesh>(vertices0, 3, indices0, 3, device);
 
 	// Create a square mesh
 
 	Vertex vertices1[] =
 	{
-		{ XMFLOAT3(-1.0f, +1.5f, +0.0f), red },
-		{ XMFLOAT3(-1.0f, -0.5f, +0.0f), blue },
-		{ XMFLOAT3(-3.0f, -0.5f, +0.0f), green },
-		{ XMFLOAT3(-3.0f, +1.5f, +0.0f), yellow },
+		{ XMFLOAT3(+1.0f, +1.0f, +0.0f), red },
+		{ XMFLOAT3(+1.0f, -1.0f, +0.0f), blue },
+		{ XMFLOAT3(-1.0f, -1.0f, +0.0f), green },
+		{ XMFLOAT3(-1.0f, +1.0f, +0.0f), yellow },
 	};
 
 	int indices1[] = { 0, 1, 2, 0, 2, 3 };
-	meshes[1] = new Mesh(vertices1, 4, indices1, 6, device);
+	std::shared_ptr<Mesh> meshSqr = std::make_shared<Mesh>(vertices1, 4, indices1, 6, device);
 
 	// Create a circle mesh
 	const int slices = 1000;
@@ -194,11 +194,11 @@ void Game::CreateBasicGeometry()
 	int* indices3 = new int[slices * 3];
 
 	// Center of the circle
-	vertices3[0].Position = XMFLOAT3(+2.0f, +0.5f, +0.0f);
+	vertices3[0].Position = XMFLOAT3(+0.0f, +0.0f, +0.0f);
 	vertices3[0].Color = white;
 	for (int i = 0; i < slices; ++i)
 	{
-		vertices3[i + 1].Position = XMFLOAT3(+2.0f - sin(float(i) / slices * 2 * 3.1415927f), +0.5f + cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
+		vertices3[i + 1].Position = XMFLOAT3(-sin(float(i) / slices * 2 * 3.1415927f), +cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
 
 		// Convert HSL color space to RGB to make a color wheel
 		XMFLOAT4 hsvColor = { float(i) / float(slices), 1.0f, 1.0f, 1.0f };
@@ -212,11 +212,16 @@ void Game::CreateBasicGeometry()
 		indices3[3 * i + 2] = 0;
 	}
 
-	meshes[2] = new Mesh(vertices3, slices + 1, indices3, slices * 3, device);
+	const std::shared_ptr<Mesh> meshCir = std::make_shared<Mesh>(vertices3, slices + 1, indices3, slices * 3, device);
 
 	// Clear the memory
 	delete[] vertices3;
 	delete[] indices3;
+
+	// Create a GameEntity
+	entities[0] = new GameEntity(meshCir);
+	entities[1] = new GameEntity(meshSqr);
+	entities[2] = new GameEntity(meshTri);
 }
 
 
@@ -266,31 +271,32 @@ void Game::Draw(float deltaTime, float totalTime)
 		1.0f,
 		0);
 
-	// Send data to shader variables
-	//  - Do this ONCE PER OBJECT you're drawing
-	//  - This is actually a complex process of copying data to a local buffer
-	//    and then copying that entire buffer to the GPU.  
-	//  - The "SimpleShader" class handles all of that for you.
-	vertexShader->SetMatrix4x4("world", worldMatrix);
-	vertexShader->SetMatrix4x4("view", viewMatrix);
-	vertexShader->SetMatrix4x4("projection", projectionMatrix);
-
-	// Once you've set all of the data you care to change for
-	// the next draw call, you need to actually send it to the GPU
-	//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
-	vertexShader->CopyAllBufferData();
-
-	// Set the vertex and pixel shaders to use for the next Draw() command
-	//  - These don't technically need to be set every frame...YET
-	//  - Once you start applying different shaders to different objects,
-	//    you'll need to swap the current shaders before each draw
-	vertexShader->SetShader();
-	pixelShader->SetShader();
-
-	for (int i = 0; i < meshCount; ++i)
+	for (int i = 0; i < entityCount; ++i)
 	{
-		ID3D11Buffer* vertexBuffer = meshes[i]->GetVertexBuffer();
-		ID3D11Buffer* indexBuffer = meshes[i]->GetIndexBuffer();
+		// Send data to shader variables
+		//  - Do this ONCE PER OBJECT you're drawing
+		//  - This is actually a complex process of copying data to a local buffer
+		//    and then copying that entire buffer to the GPU.  
+		//  - The "SimpleShader" class handles all of that for you.
+		vertexShader->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+		vertexShader->SetMatrix4x4("view", viewMatrix);
+		vertexShader->SetMatrix4x4("projection", projectionMatrix);
+
+		// Once you've set all of the data you care to change for
+		// the next draw call, you need to actually send it to the GPU
+		//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
+		vertexShader->CopyAllBufferData();
+
+		// Set the vertex and pixel shaders to use for the next Draw() command
+		//  - These don't technically need to be set every frame...YET
+		//  - Once you start applying different shaders to different objects,
+		//    you'll need to swap the current shaders before each draw
+		vertexShader->SetShader();
+		pixelShader->SetShader();
+
+
+		ID3D11Buffer* vertexBuffer = entities[i]->GetMesh()->GetVertexBuffer();
+		ID3D11Buffer* indexBuffer = entities[i]->GetMesh()->GetIndexBuffer();
 		// Set buffers in the input assembler
 		//  - Do this ONCE PER OBJECT you're drawing, since each object might
 		//    have different geometry.
@@ -305,7 +311,7 @@ void Game::Draw(float deltaTime, float totalTime)
 		//  - DrawIndexed() uses the currently set INDEX BUFFER to look up corresponding
 		//     vertices in the currently set VERTEX BUFFER
 		context->DrawIndexed(
-			meshes[i]->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
+			entities[i]->GetMesh()->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
 			0,								// Offset to the first index we want to use
 			0);								// Offset to add to each index when looking up vertices
 	}
@@ -374,5 +380,24 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
+	XMVECTOR sVec = XMLoadFloat3(&entities[0]->GetScale());
+	sVec = XMVectorScale(sVec, 1.0f + wheelDelta);
+	XMFLOAT3 s;
+	XMStoreFloat3(&s, sVec);
+	entities[0]->SetScale(s);
+
+	XMVECTOR tVec = XMLoadFloat3(&entities[1]->GetTranslation());
+	XMFLOAT3 t = { wheelDelta, wheelDelta, 0.0f };
+	tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
+	XMStoreFloat3(&t, tVec);
+	entities[1]->SetTranslation(t);
+
+	XMVECTOR rQua = XMLoadFloat4(&entities[2]->GetRotation());
+	XMFLOAT3 axis = { 0.0f, 0.0f, 1.0f };
+	XMVECTOR newR = XMQuaternionRotationAxis(XMLoadFloat3(&axis), wheelDelta / 10.0f);
+	rQua = XMQuaternionMultiply(rQua, newR);
+	XMFLOAT4 r;
+	XMStoreFloat4(&r, rQua);
+	entities[2]->SetRotation(r);
 }
 #pragma endregion
