@@ -138,7 +138,6 @@ void Game::CreateMatrices()
 	XMStoreFloat4x4(&projectionMatrix, XMMatrixTranspose(P)); // Transpose for HLSL!
 }
 
-
 // --------------------------------------------------------
 // Creates the geometry we're going to draw - a single triangle for now
 // --------------------------------------------------------
@@ -151,8 +150,6 @@ void Game::CreateBasicGeometry()
 	XMFLOAT4 blue = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
 	XMFLOAT4 yellow = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
 	XMFLOAT4 white = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	XMFLOAT4 colors[] = { red, green, blue, yellow };
 
 	// Create mesh data
 	meshes = new Mesh*[meshCount];
@@ -164,9 +161,9 @@ void Game::CreateBasicGeometry()
 	//    over to a DirectX-controlled data structure (the vertex buffer)
 	Vertex vertices0[] =
 	{
-		{ XMFLOAT3(+0.0f, +1.0f, +0.0f), red },
-		{ XMFLOAT3(+1.155f, -1.0f, +0.0f), blue },
-		{ XMFLOAT3(-1.155f, -1.0f, +0.0f), green },
+		{ XMFLOAT3(+0.0f, +0.5f, +0.0f), red },
+		{ XMFLOAT3(+1.155f, -1.5f, +0.0f), blue },
+		{ XMFLOAT3(-1.155f, -1.5f, +0.0f), green },
 	};
 
 	// Set up the indices, which tell us which vertices to use and in which order
@@ -180,40 +177,44 @@ void Game::CreateBasicGeometry()
 
 	// Create a square mesh
 
-	Vertex vertices1[] = 
+	Vertex vertices1[] =
 	{
-		{ XMFLOAT3(-1.0f, +2.0f, +0.0f), red },
-		{ XMFLOAT3(-1.0f, +0.0f, +0.0f), blue },
-		{ XMFLOAT3(-3.0f, +0.0f, +0.0f), green },
-		{ XMFLOAT3(-3.0f, +2.0f, +0.0f), yellow },
+		{ XMFLOAT3(-1.0f, +1.5f, +0.0f), red },
+		{ XMFLOAT3(-1.0f, -0.5f, +0.0f), blue },
+		{ XMFLOAT3(-3.0f, -0.5f, +0.0f), green },
+		{ XMFLOAT3(-3.0f, +1.5f, +0.0f), yellow },
 	};
 
 	int indices1[] = { 0, 1, 2, 0, 2, 3 };
 	meshes[1] = new Mesh(vertices1, 4, indices1, 6, device);
 
 	// Create a circle mesh
-	const int slices = 4;
+	const int slices = 1000;
 	Vertex* vertices3 = new Vertex[slices + 1];
 	int* indices3 = new int[slices * 3];
-	vertices3[0].Position = XMFLOAT3(+2.0f, +1.0f, +0.0f);
+
+	// Center of the circle
+	vertices3[0].Position = XMFLOAT3(+2.0f, +0.5f, +0.0f);
 	vertices3[0].Color = white;
 	for (int i = 0; i < slices; ++i)
 	{
-		vertices3[i + 1].Position = XMFLOAT3(+2.0f + cos(float(i) / slices * 3.1415927f * 2), +1.0f + sin(float(i) / slices * 3.1415927f * 2), +0.0f);
+		vertices3[i + 1].Position = XMFLOAT3(+2.0f - sin(float(i) / slices * 2 * 3.1415927f), +0.5f + cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
 
-		float rgbColor[4];
-		XMFLOAT4 hsvColor = { float(i) / slices, 1.0f, 1.0f, 1.0f };
-		const XMVECTOR rgbColorVector = XMColorHSVToRGB(XMLoadFloat4(&hsvColor));
-		XMStoreFloat(rgbColor, rgbColorVector);
-		//vertices3[i + 1].Color = XMFLOAT4(rgbColor);
-		vertices3[i + 1].Color = colors[i];
+		// Convert HSL color space to RGB to make a color wheel
+		XMFLOAT4 hsvColor = { float(i) / float(slices), 1.0f, 1.0f, 1.0f };
+		const XMVECTOR hsvColorVector = XMLoadFloat4(&hsvColor);
+		const XMVECTOR rgbColorVector = XMColorHSVToRGB(hsvColorVector);
+		XMStoreFloat4(&vertices3[i + 1].Color, rgbColorVector);
 
+		// The order
 		indices3[3 * i] = i == slices - 1 ? 1 : i + 2;
 		indices3[3 * i + 1] = i + 1;
 		indices3[3 * i + 2] = 0;
 	}
+
 	meshes[2] = new Mesh(vertices3, slices + 1, indices3, slices * 3, device);
 
+	// Clear the memory
 	delete[] vertices3;
 	delete[] indices3;
 }
