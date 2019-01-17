@@ -1,9 +1,10 @@
-# Assignment 2 - Meshes
+# Assignment 3 - Making Things Move
 
 ## Tasks
 
-- [x]	Create a Mesh class to hold geometry data (vertices & indices) in DirectX buffers
-- [x]	Create three Mesh objects, with different geometry, in the Game class
-- [x]	Alter the Draw() method in Game to draw your meshes to the screen
-- [x]	Clean up any and all memory leaks, and be sure to release your DX resources properly
-- [x]	Clean up any and all warnings in your code (seriously, don’t submit code with warnings)
+- [ ]	Create a class that represents individual game entities and their transformations
+- [ ]	Ensure that Meshes can be shared among multiple entities
+- [ ]	Create and draw at least 5 entities, with several sharing the same Mesh object
+- [ ]	Update your entity transformations each frame so the entities move/scale/etc.
+- [ ]	Ensure you have no warnings, memory leaks or DX resource leaks.
+
