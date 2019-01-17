@@ -386,17 +386,17 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
-	//XMVECTOR sVec = XMLoadFloat3(&entities[0]->GetScale());
-	//sVec = XMVectorScale(sVec, 1.0f + wheelDelta);
-	//XMFLOAT3 s;
-	//XMStoreFloat3(&s, sVec);
-	//entities[0]->SetScale(s);
+	XMVECTOR sVec = XMLoadFloat3(&entities[0]->GetScale());
+	sVec = XMVectorScale(sVec, 1.0f + wheelDelta / 10.0f);
+	XMFLOAT3 s;
+	XMStoreFloat3(&s, sVec);
+	entities[0]->SetScale(s);
 
-	//XMVECTOR tVec = XMLoadFloat3(&entities[0]->GetTranslation());
-	//XMFLOAT3 t = { wheelDelta, wheelDelta, 0.0f };
-	//tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
-	//XMStoreFloat3(&t, tVec);
-	//entities[0]->SetTranslation(t);
+	XMVECTOR tVec = XMLoadFloat3(&entities[0]->GetTranslation());
+	XMFLOAT3 t = { wheelDelta / 10.0f, wheelDelta / 10.0f, 0.0f };
+	tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
+	XMStoreFloat3(&t, tVec);
+	entities[0]->SetTranslation(t);
 
 	XMVECTOR rQua = XMLoadFloat4(&entities[0]->GetRotation());
 	XMFLOAT3 axis = { 1.0f, 1.0f, -1.0f };

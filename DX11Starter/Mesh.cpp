@@ -52,6 +52,8 @@ Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, 
 	// Actually create the buffer with the initial data
 	// - Once we do this, we'll NEVER CHANGE THE BUFFER AGAIN
 	device->CreateBuffer(&ibd, &initialIndexData, &indexBuffer);
+
+	printf("[INFO] Mesh created at <0x%p>.\n", this);
 }
 
 
@@ -59,4 +61,6 @@ Mesh::~Mesh()
 {
 	if (vertexBuffer) { vertexBuffer->Release(); }
 	if (indexBuffer) { indexBuffer->Release(); }
+
+	printf("[INFO] Mesh destroyed at <0x%p>.\n", this);
 }

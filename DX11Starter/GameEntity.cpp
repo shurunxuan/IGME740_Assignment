@@ -7,6 +7,9 @@ GameEntity::GameEntity()
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
 	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
+
+	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity().\n", this);
+
 }
 
 GameEntity::GameEntity(const std::shared_ptr<Mesh> m)
@@ -16,6 +19,13 @@ GameEntity::GameEntity(const std::shared_ptr<Mesh> m)
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
 	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
+
+	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity(const std::shared_ptr<Mesh> m).\n", this);
+}
+
+GameEntity::~GameEntity() 
+{
+	printf("[INFO] GameEntity destroyed at <0x%p>.\n", this);
 }
 
 void GameEntity::UpdateWorldMatrix()
@@ -29,7 +39,7 @@ void GameEntity::UpdateWorldMatrix()
 	XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(w));
 
 	shouldUpdate = false;
-	printf("[INFO] WorldMatrix of <%p> Updated.\n", this);
+	printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
 }
 
 void GameEntity::SetTranslation(const DirectX::XMFLOAT3 t)

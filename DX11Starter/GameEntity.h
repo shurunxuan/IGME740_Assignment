@@ -9,7 +9,7 @@ class GameEntity
 public:
 	GameEntity();
 	GameEntity(std::shared_ptr<Mesh> m);
-	~GameEntity() = default;
+	~GameEntity();
 
 	void SetTranslation(DirectX::XMFLOAT3 t);
 	void SetScale(DirectX::XMFLOAT3 s);
