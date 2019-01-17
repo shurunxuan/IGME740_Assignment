@@ -149,44 +149,50 @@ void Game::CreateBasicGeometry()
 	XMFLOAT4 green = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 	XMFLOAT4 blue = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
 	XMFLOAT4 yellow = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
+	XMFLOAT4 cyan = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 magenta = XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f);
 	XMFLOAT4 white = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	// Create GameEntity data
 	entities = new GameEntity*[entityCount];
 
 	// Create a triangle mesh
 
-	// Set up the vertices of the triangle we would like to draw
-	// - We're going to copy this array, exactly as it exists in memory
-	//    over to a DirectX-controlled data structure (the vertex buffer)
 	Vertex vertices0[] =
 	{
-		{ XMFLOAT3(+0.0f, +0.5f, +0.0f), red },
-		{ XMFLOAT3(+1.155f, -1.5f, +0.0f), blue },
-		{ XMFLOAT3(-1.155f, -1.5f, +0.0f), green },
+		{ XMFLOAT3(+0.0f, +1.0f, +0.0f), red },
+		{ XMFLOAT3(+0.866f, -0.5f, +0.0f), blue },
+		{ XMFLOAT3(-0.866f, -0.5f, +0.0f), green },
 	};
 
-	// Set up the indices, which tell us which vertices to use and in which order
-	// - This is somewhat redundant for just 3 vertices (it's a simple example)
-	// - Indices are technically not required if the vertices are in the buffer 
-	//    in the correct order and each one will be used exactly once
-	// - But just to see how it's done...
 	int indices0[] = { 0, 1, 2 };
 
-	std::shared_ptr<Mesh> meshTri = std::make_shared<Mesh>(vertices0, 3, indices0, 3, device);
+	const std::shared_ptr<Mesh> meshTri = std::make_shared<Mesh>(vertices0, 3, indices0, 3, device);
 
-	// Create a square mesh
+	// Create a cube mesh
 
 	Vertex vertices1[] =
 	{
-		{ XMFLOAT3(+1.0f, +1.0f, +0.0f), red },
-		{ XMFLOAT3(+1.0f, -1.0f, +0.0f), blue },
-		{ XMFLOAT3(-1.0f, -1.0f, +0.0f), green },
-		{ XMFLOAT3(-1.0f, +1.0f, +0.0f), yellow },
+		{ XMFLOAT3(+0.5f, +0.5f, -0.5f), white },
+		{ XMFLOAT3(+0.5f, +0.5f, +0.5f), red },
+		{ XMFLOAT3(-0.5f, +0.5f, +0.5f), yellow },
+		{ XMFLOAT3(-0.5f, +0.5f, -0.5f), green },
+		{ XMFLOAT3(-0.5f, -0.5f, -0.5f), cyan },
+		{ XMFLOAT3(+0.5f, -0.5f, -0.5f), blue },
+		{ XMFLOAT3(+0.5f, -0.5f, +0.5f), magenta },
+		{ XMFLOAT3(-0.5f, -0.5f, +0.5f), black },
 	};
 
-	int indices1[] = { 0, 1, 2, 0, 2, 3 };
-	std::shared_ptr<Mesh> meshSqr = std::make_shared<Mesh>(vertices1, 4, indices1, 6, device);
+	int indices1[] = {
+		0, 1, 6, 0, 6, 5,
+		0, 5, 4, 0, 4, 3,
+		0, 3, 2, 0, 2, 1,
+		7, 6, 1, 7, 1, 2,
+		7, 2, 3, 7, 3, 4,
+		7, 4, 5, 7, 5, 6,
+	};
+	const std::shared_ptr<Mesh> meshCub = std::make_shared<Mesh>(vertices1, 8, indices1, 36, device);
 
 	// Create a circle mesh
 	const int slices = 1000;
@@ -198,7 +204,7 @@ void Game::CreateBasicGeometry()
 	vertices3[0].Color = white;
 	for (int i = 0; i < slices; ++i)
 	{
-		vertices3[i + 1].Position = XMFLOAT3(-sin(float(i) / slices * 2 * 3.1415927f), +cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
+		vertices3[i + 1].Position = XMFLOAT3(-sin(float(i) / slices * 3.1415927f), +cos(float(i) / slices * 3.1415927f), +0.0f);
 
 		// Convert HSL color space to RGB to make a color wheel
 		XMFLOAT4 hsvColor = { float(i) / float(slices), 1.0f, 1.0f, 1.0f };
@@ -218,10 +224,10 @@ void Game::CreateBasicGeometry()
 	delete[] vertices3;
 	delete[] indices3;
 
-	// Create a GameEntity
-	entities[0] = new GameEntity(meshCir);
-	entities[1] = new GameEntity(meshSqr);
-	entities[2] = new GameEntity(meshTri);
+	// Create GameEntity
+	entities[0] = new GameEntity(meshCub);
+	//entities[1] = new GameEntity(meshSqr);
+	//entities[2] = new GameEntity(meshTri);
 }
 
 
@@ -380,24 +386,24 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
-	XMVECTOR sVec = XMLoadFloat3(&entities[0]->GetScale());
-	sVec = XMVectorScale(sVec, 1.0f + wheelDelta);
-	XMFLOAT3 s;
-	XMStoreFloat3(&s, sVec);
-	entities[0]->SetScale(s);
+	//XMVECTOR sVec = XMLoadFloat3(&entities[0]->GetScale());
+	//sVec = XMVectorScale(sVec, 1.0f + wheelDelta);
+	//XMFLOAT3 s;
+	//XMStoreFloat3(&s, sVec);
+	//entities[0]->SetScale(s);
 
-	XMVECTOR tVec = XMLoadFloat3(&entities[1]->GetTranslation());
-	XMFLOAT3 t = { wheelDelta, wheelDelta, 0.0f };
-	tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
-	XMStoreFloat3(&t, tVec);
-	entities[1]->SetTranslation(t);
+	//XMVECTOR tVec = XMLoadFloat3(&entities[0]->GetTranslation());
+	//XMFLOAT3 t = { wheelDelta, wheelDelta, 0.0f };
+	//tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
+	//XMStoreFloat3(&t, tVec);
+	//entities[0]->SetTranslation(t);
 
-	XMVECTOR rQua = XMLoadFloat4(&entities[2]->GetRotation());
-	XMFLOAT3 axis = { 0.0f, 0.0f, 1.0f };
+	XMVECTOR rQua = XMLoadFloat4(&entities[0]->GetRotation());
+	XMFLOAT3 axis = { 1.0f, 1.0f, -1.0f };
 	XMVECTOR newR = XMQuaternionRotationAxis(XMLoadFloat3(&axis), wheelDelta / 10.0f);
 	rQua = XMQuaternionMultiply(rQua, newR);
 	XMFLOAT4 r;
 	XMStoreFloat4(&r, rQua);
-	entities[2]->SetRotation(r);
+	entities[0]->SetRotation(r);
 }
 #pragma endregion
