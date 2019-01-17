@@ -51,13 +51,13 @@ Game::~Game()
 	delete vertexShader;
 	delete pixelShader;
 
-	// Delete mesh data
-	for (int i = 0; i < meshCount; ++i)
+	// Delete GameEntity data
+	for (int i = 0; i < entityCount; ++i)
 	{
 		// TODO: Potential Access Violation not handled.
-		delete meshes[i];
+		delete entities[i];
 	}
-	delete[] meshes;
+	delete[] entities;
 }
 
 // --------------------------------------------------------
@@ -149,74 +149,96 @@ void Game::CreateBasicGeometry()
 	XMFLOAT4 green = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 	XMFLOAT4 blue = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
 	XMFLOAT4 yellow = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
+	XMFLOAT4 cyan = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 magenta = XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f);
 	XMFLOAT4 white = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
-	// Create mesh data
-	meshes = new Mesh*[meshCount];
+	// Create GameEntity data
+	entities = new GameEntity*[entityCount];
 
 	// Create a triangle mesh
-
-	// Set up the vertices of the triangle we would like to draw
-	// - We're going to copy this array, exactly as it exists in memory
-	//    over to a DirectX-controlled data structure (the vertex buffer)
-	Vertex vertices0[] =
+	Vertex verticesTri[] =
 	{
-		{ XMFLOAT3(+0.0f, +0.5f, +0.0f), red },
-		{ XMFLOAT3(+1.155f, -1.5f, +0.0f), blue },
-		{ XMFLOAT3(-1.155f, -1.5f, +0.0f), green },
+		{ XMFLOAT3(+0.0f, +1.0f, +0.0f), red },
+		{ XMFLOAT3(+0.866f, -0.5f, +0.0f), blue },
+		{ XMFLOAT3(-0.866f, -0.5f, +0.0f), green },
 	};
 
-	// Set up the indices, which tell us which vertices to use and in which order
-	// - This is somewhat redundant for just 3 vertices (it's a simple example)
-	// - Indices are technically not required if the vertices are in the buffer 
-	//    in the correct order and each one will be used exactly once
-	// - But just to see how it's done...
-	int indices0[] = { 0, 1, 2 };
+	int indicesTri[] = { 0, 1, 2 };
 
-	meshes[0] = new Mesh(vertices0, 3, indices0, 3, device);
+	const std::shared_ptr<Mesh> meshTri = std::make_shared<Mesh>(verticesTri, 3, indicesTri, 3, device);
 
-	// Create a square mesh
-
-	Vertex vertices1[] =
+	// Create a cube mesh
+	Vertex verticesCube[] =
 	{
-		{ XMFLOAT3(-1.0f, +1.5f, +0.0f), red },
-		{ XMFLOAT3(-1.0f, -0.5f, +0.0f), blue },
-		{ XMFLOAT3(-3.0f, -0.5f, +0.0f), green },
-		{ XMFLOAT3(-3.0f, +1.5f, +0.0f), yellow },
+		{ XMFLOAT3(+1.0f, +1.0f, -1.0f), white },
+		{ XMFLOAT3(+1.0f, +1.0f, +1.0f), red },
+		{ XMFLOAT3(-1.0f, +1.0f, +1.0f), yellow },
+		{ XMFLOAT3(-1.0f, +1.0f, -1.0f), green },
+		{ XMFLOAT3(-1.0f, -1.0f, -1.0f), cyan },
+		{ XMFLOAT3(+1.0f, -1.0f, -1.0f), blue },
+		{ XMFLOAT3(+1.0f, -1.0f, +1.0f), magenta },
+		{ XMFLOAT3(-1.0f, -1.0f, +1.0f), black },
 	};
 
-	int indices1[] = { 0, 1, 2, 0, 2, 3 };
-	meshes[1] = new Mesh(vertices1, 4, indices1, 6, device);
+	int indicesCube[] = {
+		0, 1, 6, 0, 6, 5,
+		0, 5, 4, 0, 4, 3,
+		0, 3, 2, 0, 2, 1,
+		7, 6, 1, 7, 1, 2,
+		7, 2, 3, 7, 3, 4,
+		7, 4, 5, 7, 5, 6,
+	};
+	const std::shared_ptr<Mesh> meshCube = std::make_shared<Mesh>(verticesCube, 8, indicesCube, 36, device);
 
 	// Create a circle mesh
 	const int slices = 1000;
-	Vertex* vertices3 = new Vertex[slices + 1];
-	int* indices3 = new int[slices * 3];
+	Vertex* verticesCir = new Vertex[slices + 1];
+	int* indicesCir = new int[slices * 3];
 
 	// Center of the circle
-	vertices3[0].Position = XMFLOAT3(+2.0f, +0.5f, +0.0f);
-	vertices3[0].Color = white;
+	verticesCir[0].Position = XMFLOAT3(+0.0f, +0.0f, +0.0f);
+	verticesCir[0].Color = white;
 	for (int i = 0; i < slices; ++i)
 	{
-		vertices3[i + 1].Position = XMFLOAT3(+2.0f - sin(float(i) / slices * 2 * 3.1415927f), +0.5f + cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
+		verticesCir[i + 1].Position = XMFLOAT3(-sin(float(i) / slices * 2 * 3.1415927f), +cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
 
 		// Convert HSL color space to RGB to make a color wheel
 		XMFLOAT4 hsvColor = { float(i) / float(slices), 1.0f, 1.0f, 1.0f };
 		const XMVECTOR hsvColorVector = XMLoadFloat4(&hsvColor);
 		const XMVECTOR rgbColorVector = XMColorHSVToRGB(hsvColorVector);
-		XMStoreFloat4(&vertices3[i + 1].Color, rgbColorVector);
+		XMStoreFloat4(&verticesCir[i + 1].Color, rgbColorVector);
 
 		// The order
-		indices3[3 * i] = i == slices - 1 ? 1 : i + 2;
-		indices3[3 * i + 1] = i + 1;
-		indices3[3 * i + 2] = 0;
+		indicesCir[3 * i] = i == slices - 1 ? 1 : i + 2;
+		indicesCir[3 * i + 1] = i + 1;
+		indicesCir[3 * i + 2] = 0;
 	}
 
-	meshes[2] = new Mesh(vertices3, slices + 1, indices3, slices * 3, device);
+	const std::shared_ptr<Mesh> meshCir = std::make_shared<Mesh>(verticesCir, slices + 1, indicesCir, slices * 3, device);
 
 	// Clear the memory
-	delete[] vertices3;
-	delete[] indices3;
+	delete[] verticesCir;
+	delete[] indicesCir;
+
+	// Create GameEntity
+	entities[0] = new GameEntity(meshCube);
+	entities[1] = new GameEntity(meshTri);
+	entities[2] = new GameEntity(meshCir);
+	entities[3] = new GameEntity(meshTri);
+	entities[4] = new GameEntity(meshCir);
+
+	// Initial Transform
+	entities[1]->SetTranslation(XMFLOAT3(+1.0f, +1.0f, +0.0f));
+	entities[2]->SetTranslation(XMFLOAT3(-1.0f, +1.0f, +0.0f));
+	entities[3]->SetTranslation(XMFLOAT3(+1.0f, -1.0f, +0.0f));
+	entities[4]->SetTranslation(XMFLOAT3(-1.0f, -1.0f, +0.0f));
+
+	for (int i = 0; i < entityCount; ++i)
+	{
+		entities[i]->SetScale(XMFLOAT3(0.2f, 0.2f, 0.2f));
+	}
 }
 
 
@@ -238,11 +260,64 @@ void Game::OnResize()
 	XMStoreFloat4x4(&projectionMatrix, XMMatrixTranspose(P)); // Transpose for HLSL!
 }
 
+// Several small variables to record the direction of the animation
+bool animationDirection = true;
+
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
+	// Rotate the Cube Mesh (0)
+	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
+	XMFLOAT3 axis_0 = { 1.0f, 1.0f, -1.0f };
+	XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
+	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
+	XMFLOAT4 r_0;
+	XMStoreFloat4(&r_0, rQua_0);
+	entities[0]->SetRotation(r_0);
+
+	// Rotate the Triangle Mesh (1) 
+	XMVECTOR rQua_1 = XMLoadFloat4(&entities[1]->GetRotation());
+	XMFLOAT3 axis_1 = { 0.0f, 0.0f, 1.0f };
+	XMVECTOR newR_1 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_1), deltaTime * 2.0f);
+	rQua_1 = XMQuaternionMultiply(rQua_1, newR_1);
+	XMFLOAT4 r_1;
+	XMStoreFloat4(&r_1, rQua_1);
+	entities[1]->SetRotation(r_1);
+
+	// Move the Circle Mesh (2) in a circle
+	XMFLOAT3 t_2 = { -1.0f + cos(totalTime / 3.0f * 3.1415927f) / 3.0f, 1.0f + sin(totalTime / 3.0f * 3.1415927f) / 3.0f, 0.0f };
+	entities[2]->SetTranslation(t_2);
+
+	// Rotate the Circle Mesh (2) 
+	XMVECTOR rQua_2 = XMLoadFloat4(&entities[2]->GetRotation());
+	XMFLOAT3 axis_2 = { 0.0f, 0.0f, 1.0f };
+	XMVECTOR newR_2 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_2), deltaTime * 8.0f);
+	rQua_2 = XMQuaternionMultiply(rQua_2, newR_2);
+	XMFLOAT4 r_2;
+	XMStoreFloat4(&r_2, rQua_2);
+	entities[2]->SetRotation(r_2);
+
+	// Move the Circle Mesh (4)
+	XMVECTOR tVec_4 = XMLoadFloat3(&entities[4]->GetTranslation());
+	XMFLOAT3 tDir(0.5f * deltaTime * (animationDirection ? 1 : -1), 0.0f, 0.0f);
+	XMVECTOR tDirVec = XMLoadFloat3(&tDir);
+	XMVECTOR newTVec = XMVectorAdd(tVec_4, tDirVec);
+	XMFLOAT3 newT;
+	XMStoreFloat3(&newT, newTVec);
+	if (newT.x > -0.5f || newT.x < -1.5f) animationDirection = !animationDirection;
+	entities[4]->SetTranslation(newT);
+
+	// Rotate the Circle Mesh(4)
+	XMVECTOR rQua_4 = XMLoadFloat4(&entities[4]->GetRotation());
+	XMFLOAT3 axis_4 = { 0.0f, 0.0f, 1.0f };
+	XMVECTOR newR_4 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_4), deltaTime * 4.0f);
+	rQua_4 = XMQuaternionMultiply(rQua_4, newR_4);
+	XMFLOAT4 r_4;
+	XMStoreFloat4(&r_4, rQua_4);
+	entities[4]->SetRotation(r_4);
+
 	// Quit if the escape key is pressed
 	if (GetAsyncKeyState(VK_ESCAPE))
 		Quit();
@@ -266,31 +341,32 @@ void Game::Draw(float deltaTime, float totalTime)
 		1.0f,
 		0);
 
-	// Send data to shader variables
-	//  - Do this ONCE PER OBJECT you're drawing
-	//  - This is actually a complex process of copying data to a local buffer
-	//    and then copying that entire buffer to the GPU.  
-	//  - The "SimpleShader" class handles all of that for you.
-	vertexShader->SetMatrix4x4("world", worldMatrix);
-	vertexShader->SetMatrix4x4("view", viewMatrix);
-	vertexShader->SetMatrix4x4("projection", projectionMatrix);
-
-	// Once you've set all of the data you care to change for
-	// the next draw call, you need to actually send it to the GPU
-	//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
-	vertexShader->CopyAllBufferData();
-
-	// Set the vertex and pixel shaders to use for the next Draw() command
-	//  - These don't technically need to be set every frame...YET
-	//  - Once you start applying different shaders to different objects,
-	//    you'll need to swap the current shaders before each draw
-	vertexShader->SetShader();
-	pixelShader->SetShader();
-
-	for (int i = 0; i < meshCount; ++i)
+	for (int i = 0; i < entityCount; ++i)
 	{
-		ID3D11Buffer* vertexBuffer = meshes[i]->GetVertexBuffer();
-		ID3D11Buffer* indexBuffer = meshes[i]->GetIndexBuffer();
+		// Send data to shader variables
+		//  - Do this ONCE PER OBJECT you're drawing
+		//  - This is actually a complex process of copying data to a local buffer
+		//    and then copying that entire buffer to the GPU.  
+		//  - The "SimpleShader" class handles all of that for you.
+		vertexShader->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+		vertexShader->SetMatrix4x4("view", viewMatrix);
+		vertexShader->SetMatrix4x4("projection", projectionMatrix);
+
+		// Once you've set all of the data you care to change for
+		// the next draw call, you need to actually send it to the GPU
+		//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
+		vertexShader->CopyAllBufferData();
+
+		// Set the vertex and pixel shaders to use for the next Draw() command
+		//  - These don't technically need to be set every frame...YET
+		//  - Once you start applying different shaders to different objects,
+		//    you'll need to swap the current shaders before each draw
+		vertexShader->SetShader();
+		pixelShader->SetShader();
+
+
+		ID3D11Buffer* vertexBuffer = entities[i]->GetMesh()->GetVertexBuffer();
+		ID3D11Buffer* indexBuffer = entities[i]->GetMesh()->GetIndexBuffer();
 		// Set buffers in the input assembler
 		//  - Do this ONCE PER OBJECT you're drawing, since each object might
 		//    have different geometry.
@@ -305,7 +381,7 @@ void Game::Draw(float deltaTime, float totalTime)
 		//  - DrawIndexed() uses the currently set INDEX BUFFER to look up corresponding
 		//     vertices in the currently set VERTEX BUFFER
 		context->DrawIndexed(
-			meshes[i]->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
+			entities[i]->GetMesh()->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
 			0,								// Offset to the first index we want to use
 			0);								// Offset to add to each index when looking up vertices
 	}
@@ -374,5 +450,24 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
+	XMVECTOR sVec = XMLoadFloat3(&entities[4]->GetScale());
+	sVec = XMVectorScale(sVec, 1.0f + wheelDelta / 10.0f);
+	XMFLOAT3 s;
+	XMStoreFloat3(&s, sVec);
+	entities[4]->SetScale(s);
+
+	//XMVECTOR tVec = XMLoadFloat3(&entities[0]->GetTranslation());
+	//XMFLOAT3 t = { wheelDelta / 10.0f, wheelDelta / 10.0f, 0.0f };
+	//tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
+	//XMStoreFloat3(&t, tVec);
+	//entities[0]->SetTranslation(t);
+
+	//XMVECTOR rQua = XMLoadFloat4(&entities[0]->GetRotation());
+	//XMFLOAT3 axis = { 1.0f, 1.0f, -1.0f };
+	//XMVECTOR newR = XMQuaternionRotationAxis(XMLoadFloat3(&axis), wheelDelta / 10.0f);
+	//rQua = XMQuaternionMultiply(rQua, newR);
+	//XMFLOAT4 r;
+	//XMStoreFloat4(&r, rQua);
+	//entities[0]->SetRotation(r);
 }
 #pragma endregion
