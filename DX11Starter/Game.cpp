@@ -25,8 +25,8 @@ Game::Game(HINSTANCE hInstance)
 	// Initialize fields
 	vertexBuffer = 0;
 	indexBuffer = 0;
-	vertexShader = 0;
-	pixelShader = 0;
+	defaultVtxShader = 0;
+	defaultPxlShader = 0;
 
 #if defined(DEBUG) || defined(_DEBUG)
 	// Do we want a console window?  Probably only in debug mode
@@ -50,8 +50,8 @@ Game::~Game()
 
 	// Delete our simple shader objects, which
 	// will clean up their own internal DirectX stuff
-	delete vertexShader;
-	delete pixelShader;
+	//delete vertexShader;
+	//delete pixelShader;
 
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
@@ -92,11 +92,13 @@ void Game::Init()
 // --------------------------------------------------------
 void Game::LoadShaders()
 {
-	vertexShader = new SimpleVertexShader(device, context);
-	vertexShader->LoadShaderFile(L"VertexShader.cso");
+	defaultVtxShader = std::make_shared<SimpleVertexShader>(device, context);
+	defaultPxlShader = std::make_shared<SimplePixelShader>(device, context);
+	//vertexShader = new SimpleVertexShader(device, context);
+	defaultVtxShader->LoadShaderFile(L"VertexShader.cso");
 
-	pixelShader = new SimplePixelShader(device, context);
-	pixelShader->LoadShaderFile(L"PixelShader.cso");
+	//pixelShader = new SimplePixelShader(device, context);
+	defaultPxlShader->LoadShaderFile(L"PixelShader.cso");
 }
 
 
@@ -273,11 +275,14 @@ void Game::CreateBasicGeometry()
 	};
 	const std::shared_ptr<Mesh> meshCube = std::make_shared<Mesh>(verticesCube, 8, indicesCube, 36, device);
 
+	// Create Material
+	std::shared_ptr<Material> unlitMaterial = std::make_shared<Material>(defaultVtxShader, defaultPxlShader);
+
 	// Create GameEntity
 	// Initial Transform
 	for (int i = 0; i < entityCount; ++i)
 	{
-		entities[i] = new GameEntity(meshCube);
+		entities[i] = new GameEntity(meshCube, unlitMaterial);
 		entities[i]->SetScale(XMFLOAT3(0.02f, 0.02f, 0.02f));
 
 		XMVECTOR pos = XMLoadFloat3(&*(positions.begin() + i));
@@ -383,21 +388,21 @@ void Game::Draw(float deltaTime, float totalTime)
 		XMFLOAT4X4 projMat{};
 		XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
 		XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
-		vertexShader->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
-		vertexShader->SetMatrix4x4("view", viewMat);
-		vertexShader->SetMatrix4x4("projection", projMat);
+		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
+		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 
 		// Once you've set all of the data you care to change for
 		// the next draw call, you need to actually send it to the GPU
 		//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
-		vertexShader->CopyAllBufferData();
+		entities[i]->GetMaterial()->GetVertexShaderPtr()->CopyAllBufferData();
 
 		// Set the vertex and pixel shaders to use for the next Draw() command
 		//  - These don't technically need to be set every frame...YET
 		//  - Once you start applying different shaders to different objects,
 		//    you'll need to swap the current shaders before each draw
-		vertexShader->SetShader();
-		pixelShader->SetShader();
+		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetShader();
+		entities[i]->GetMaterial()->GetPixelShaderPtr()->SetShader();
 
 
 		ID3D11Buffer* vertexBuffer = entities[i]->GetMesh()->GetVertexBuffer();

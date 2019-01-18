@@ -3,6 +3,7 @@
 GameEntity::GameEntity()
 {
 	mesh = nullptr;
+	material = nullptr;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f); 
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
@@ -12,9 +13,10 @@ GameEntity::GameEntity()
 
 }
 
-GameEntity::GameEntity(const std::shared_ptr<Mesh>& m)
+GameEntity::GameEntity(const std::shared_ptr<Mesh>& m, const std::shared_ptr<Material>& mat)
 {
 	mesh = m;
+	material = mat;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
@@ -87,6 +89,11 @@ DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrix()
 Mesh* GameEntity::GetMesh() const
 {
 	return mesh.get();
+}
+
+Material * GameEntity::GetMaterial() const
+{
+	return material.get();
 }
 
 void GameEntity::MoveToward(DirectX::XMFLOAT3 direction, const float distance)
