@@ -220,7 +220,7 @@ std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> MakeSphere(int subdivisi
 			result.push_back({ triangle.vertex[2], mid[2], mid[1] });
 			result.push_back({ mid[0], mid[1], mid[2] });
 		}
-		
+
 		triangles = result;
 	}
 
@@ -246,7 +246,7 @@ void Game::CreateBasicGeometry()
 	const XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	// Create GameEntity data
-	const std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> sphere = 
+	const std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> sphere =
 		MakeSphere(4);
 	std::vector<XMFLOAT3> positions = sphere.first;
 	entityCount = int(positions.size());
@@ -321,6 +321,16 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
+	// Rotate the Cube Meshes
+	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
+	XMFLOAT3 axis_0 = { 1.0f, 1.0f, -1.0f };
+	XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
+	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
+	XMFLOAT4 r_0;
+	XMStoreFloat4(&r_0, rQua_0);
+	for (int i = 0; i < entityCount; ++i)
+		entities[i]->SetRotation(r_0);
+
 	// WASD for moving camera
 	XMFLOAT3 forward = camera->GetForward();
 	XMFLOAT3 right = camera->GetRight();

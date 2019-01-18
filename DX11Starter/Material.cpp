@@ -5,10 +5,13 @@ Material::Material(std::shared_ptr<SimpleVertexShader>& vtxShader, std::shared_p
 {
 	vertexShader = vtxShader;
 	pixelShader = pxlShader;
+
+	printf("[INFO] Material created at <0x%p>.\n", this);
 }
 
 Material::~Material()
 {
+	printf("[INFO] Material destroyed at <0x%p>.\n", this);
 }
 
 SimpleVertexShader* Material::GetVertexShaderPtr()
