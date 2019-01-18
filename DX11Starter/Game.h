@@ -5,6 +5,7 @@
 #include <DirectXMath.h>
 #include "Mesh.h"
 #include "GameEntity.h"
+#include "FirstPersonCamera.h"
 
 class Game 
 	: public DXCore
@@ -51,7 +52,10 @@ private:
 	POINT prevMousePos;
 
 	// Store the GameEntity data
-	const int entityCount = 5;
+	int entityCount;
 	GameEntity** entities;
+
+	// Camera
+	FirstPersonCamera* camera;
 };
 

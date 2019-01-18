@@ -8,7 +8,7 @@ class GameEntity
 {
 public:
 	GameEntity();
-	GameEntity(std::shared_ptr<Mesh> m);
+	GameEntity(const std::shared_ptr<Mesh>& m);
 	~GameEntity();
 
 	void SetTranslation(DirectX::XMFLOAT3 t);

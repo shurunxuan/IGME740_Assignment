@@ -12,7 +12,7 @@ GameEntity::GameEntity()
 
 }
 
-GameEntity::GameEntity(const std::shared_ptr<Mesh> m)
+GameEntity::GameEntity(const std::shared_ptr<Mesh>& m)
 {
 	mesh = m;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -39,7 +39,7 @@ void GameEntity::UpdateWorldMatrix()
 	XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(w));
 
 	shouldUpdate = false;
-	printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
+	//printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
 }
 
 void GameEntity::SetTranslation(const DirectX::XMFLOAT3 t)
