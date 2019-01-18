@@ -75,6 +75,10 @@ DXCore::~DXCore()
 	if (swapChain) { swapChain->Release();}
 	if (context) { context->Release();}
 	if (device) { device->Release();}
+
+#if defined(DEBUG) || defined(_DEBUG)
+	system("pause");
+#endif
 }
 
 // --------------------------------------------------------
