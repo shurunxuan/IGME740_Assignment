@@ -7,7 +7,7 @@ FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
 	xRotation = 0.0f;
 	yRotation = 0.0f;
 
-	position = DirectX::XMFLOAT3(0, 0, -5);
+	position = DirectX::XMFLOAT3(0, 0, 0);
 	direction = DirectX::XMFLOAT3(0, 0, 1);
 	UpdateViewMatrix();
 
@@ -26,17 +26,15 @@ void FirstPersonCamera::Update(float deltaXt, float deltaYt, float deltaZt, floa
 {
 	// Rotate direction
 	xRotation += deltaXr;
+	//if (xRotation > 3.1415927f * 2) xRotation -= 3.1415927f * 2;
+	//else if (xRotation < 0) xRotation += 3.1415927f * 2;
 	yRotation += deltaYr;
+	if (yRotation > 80.0f / 180 * 3.1415927f) yRotation = 80.0f / 180 * 3.1415927f;
+	else if (yRotation < -80.0f / 180 * 3.1415927f) yRotation = -80.0f / 180 * 3.1415927f;
 
-	// One way
-	//DirectX::XMFLOAT3 z(0.0f, 0.0f, 1.0f);
-	//DirectX::XMVECTOR rotationQua = DirectX::XMQuaternionRotationRollPitchYaw(yRotation, xRotation, 0.0f);
-	//DirectX::XMVECTOR newDirection = DirectX::XMVector3Rotate(DirectX::XMLoadFloat3(&z), rotationQua);
-	//DirectX::XMStoreFloat3(&direction, newDirection);
-
-	// Another Way
-	DirectX::XMVECTOR rotationQua = DirectX::XMQuaternionRotationRollPitchYaw(deltaYr, deltaXr, 0.0f);
-	DirectX::XMVECTOR newDirection = DirectX::XMVector3Rotate(DirectX::XMLoadFloat3(&direction), rotationQua);
+	DirectX::XMFLOAT3 z(0.0f, 0.0f, 1.0f);
+	DirectX::XMVECTOR rotationQua = DirectX::XMQuaternionRotationRollPitchYaw(yRotation, xRotation, 0.0f);
+	DirectX::XMVECTOR newDirection = DirectX::XMVector3Rotate(DirectX::XMLoadFloat3(&z), rotationQua);
 	DirectX::XMStoreFloat3(&direction, newDirection);
 
 	// Translate position

@@ -1,5 +1,7 @@
 #include "Game.h"
 #include "Vertex.h"
+#include <map>
+#include <array>
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -143,6 +145,88 @@ void Game::CreateMatrices()
 	//XMStoreFloat4x4(&projectionMatrix, XMMatrixTranspose(P)); // Transpose for HLSL!
 }
 
+#pragma region Icosphere
+struct Triangle
+{
+	int vertex[3];
+};
+
+namespace icosahedron
+{
+	const float X = .525731112119133606f;
+	const float Z = .850650808352039932f;
+	const float N = 0.f;
+
+	static const std::vector<XMFLOAT3> vertices =
+	{
+		{-X, N, Z}, {X, N, Z}, {-X, N, -Z}, {X, N, -Z},
+		{N, Z, X}, {N, Z, -X}, {N, -Z, X}, {N, -Z, -X},
+		{Z, X, N}, {-Z, X, N}, {Z, -X, N}, {-Z, -X, N}
+	};
+
+	static const std::vector<Triangle> triangles =
+	{
+		{0, 4, 1}, {0, 9, 4}, {9, 5, 4}, {4, 5, 8}, {4, 8, 1},
+		{8, 10, 1}, {8, 3, 10}, {5, 3, 8}, {5, 2, 3}, {2, 7, 3},
+		{7, 10, 3}, {7, 6, 10}, {7, 11, 6}, {11, 0, 6}, {0, 1, 6},
+		{6, 1, 10}, {9, 0, 11}, {9, 11, 2}, {9, 2, 5}, {7, 2, 11}
+	};
+}
+
+std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> MakeSphere(int subdivisions)
+{
+	std::vector<XMFLOAT3> vertices = icosahedron::vertices;
+	std::vector<Triangle> triangles = icosahedron::triangles;
+
+	for (int i = 0; i < subdivisions; ++i)
+	{
+		std::map<std::pair<int, int>, int> lookup;
+		std::vector<Triangle> result;
+		result.reserve(int(pow(4, i)) * 80);
+
+		for (Triangle& triangle : triangles)
+		{
+			std::array<int, 3> mid{};
+			for (int vtx = 0; vtx < 3; ++vtx)
+			{
+				//mid[edge] = VertexForEdge(lookup, vertices,
+				//	triangle.vertex[edge], triangle.vertex[(edge + 1) % 3]);
+				int v1 = triangle.vertex[vtx];
+				int v2 = triangle.vertex[(vtx + 1) % 3];
+				std::pair<int, int> key(v1, v2);
+				if (key.first > key.second)
+					std::swap(key.first, key.second);
+
+				const std::pair<std::map<std::pair<int, int>, int>::iterator, bool> inserted = lookup.insert({
+					key, int(vertices.size())
+					});
+				if (inserted.second)
+				{
+					XMFLOAT3& vertex0 = vertices[v1];
+					XMFLOAT3& vertex1 = vertices[v2];
+					const XMVECTOR midVertex = XMVector3Normalize(XMLoadFloat3(&vertex0) + XMLoadFloat3(&vertex1));
+					XMFLOAT3 v{};
+					XMStoreFloat3(&v, midVertex);
+					vertices.push_back(v);
+				}
+
+				mid[vtx] = inserted.first->second;
+			}
+
+			result.push_back({ triangle.vertex[0], mid[0], mid[2] });
+			result.push_back({ triangle.vertex[1], mid[1], mid[0] });
+			result.push_back({ triangle.vertex[2], mid[2], mid[1] });
+			result.push_back({ mid[0], mid[1], mid[2] });
+		}
+		
+		triangles = result;
+	}
+
+	return{ vertices, triangles };
+}
+
+#pragma endregion 
+
 // --------------------------------------------------------
 // Creates the geometry we're going to draw - a single triangle for now
 // --------------------------------------------------------
@@ -160,20 +244,11 @@ void Game::CreateBasicGeometry()
 	const XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	// Create GameEntity data
-	entityCount = 5;
+	const std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> sphere = 
+		MakeSphere(4);
+	std::vector<XMFLOAT3> positions = sphere.first;
+	entityCount = int(positions.size());
 	entities = new GameEntity*[entityCount];
-
-	// Create a triangle mesh
-	Vertex verticesTri[] =
-	{
-		{ XMFLOAT3(+0.0f, +1.0f, +0.0f), red },
-		{ XMFLOAT3(+0.866f, -0.5f, +0.0f), blue },
-		{ XMFLOAT3(-0.866f, -0.5f, +0.0f), green },
-	};
-
-	int indicesTri[] = { 0, 1, 2 };
-
-	const std::shared_ptr<Mesh> meshTri = std::make_shared<Mesh>(verticesTri, 3, indicesTri, 3, device);
 
 	// Create a cube mesh
 	Vertex verticesCube[] =
@@ -198,52 +273,18 @@ void Game::CreateBasicGeometry()
 	};
 	const std::shared_ptr<Mesh> meshCube = std::make_shared<Mesh>(verticesCube, 8, indicesCube, 36, device);
 
-	// Create a circle mesh
-	const int slices = 1000;
-	Vertex* verticesCir = new Vertex[slices + 1];
-	int* indicesCir = new int[slices * 3];
-
-	// Center of the circle
-	verticesCir[0].Position = XMFLOAT3(+0.0f, +0.0f, +0.0f);
-	verticesCir[0].Color = white;
-	for (int i = 0; i < slices; ++i)
-	{
-		verticesCir[i + 1].Position = XMFLOAT3(-sin(float(i) / slices * 2 * 3.1415927f), +cos(float(i) / slices * 2 * 3.1415927f), +0.0f);
-
-		// Convert HSL color space to RGB to make a color wheel
-		XMFLOAT4 hsvColor = { float(i) / float(slices), 1.0f, 1.0f, 1.0f };
-		const XMVECTOR hsvColorVector = XMLoadFloat4(&hsvColor);
-		const XMVECTOR rgbColorVector = XMColorHSVToRGB(hsvColorVector);
-		XMStoreFloat4(&verticesCir[i + 1].Color, rgbColorVector);
-
-		// The order
-		indicesCir[3 * i] = i == slices - 1 ? 1 : i + 2;
-		indicesCir[3 * i + 1] = i + 1;
-		indicesCir[3 * i + 2] = 0;
-	}
-
-	const std::shared_ptr<Mesh> meshCir = std::make_shared<Mesh>(verticesCir, slices + 1, indicesCir, slices * 3, device);
-
-	// Clear the memory
-	delete[] verticesCir;
-	delete[] indicesCir;
-
 	// Create GameEntity
-	entities[0] = new GameEntity(meshCube);
-	entities[1] = new GameEntity(meshTri);
-	entities[2] = new GameEntity(meshCir);
-	entities[3] = new GameEntity(meshTri);
-	entities[4] = new GameEntity(meshCir);
-
 	// Initial Transform
-	entities[1]->SetTranslation(XMFLOAT3(+1.0f, +1.0f, +0.0f));
-	entities[2]->SetTranslation(XMFLOAT3(-1.0f, +1.0f, +0.0f));
-	entities[3]->SetTranslation(XMFLOAT3(+1.0f, -1.0f, +0.0f));
-	entities[4]->SetTranslation(XMFLOAT3(-1.0f, -1.0f, +0.0f));
-
 	for (int i = 0; i < entityCount; ++i)
 	{
-		entities[i]->SetScale(XMFLOAT3(0.2f, 0.2f, 0.2f));
+		entities[i] = new GameEntity(meshCube);
+		entities[i]->SetScale(XMFLOAT3(0.02f, 0.02f, 0.02f));
+
+		XMVECTOR pos = XMLoadFloat3(&*(positions.begin() + i));
+		pos = XMVectorScale(pos, 3.0f);
+		XMFLOAT3 t{};
+		XMStoreFloat3(&t, pos);
+		entities[i]->SetTranslation(t);
 	}
 }
 
@@ -257,7 +298,7 @@ void Game::OnResize()
 	// Handle base-level DX resize stuff
 	DXCore::OnResize();
 
-	camera->UpdateProjectionMatrix(float(width), float(height), 3.14159265f / 3.0f);
+	camera->UpdateProjectionMatrix(float(width), float(height), 3.14159265f / 4.0f);
 	//// Update our projection matrix since the window size changed
 	//XMMATRIX P = XMMatrixPerspectiveFovLH(
 	//	0.25f * 3.1415926535f,	// Field of View Angle
@@ -275,56 +316,6 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
-	// Rotate the Cube Mesh (0)
-	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
-	XMFLOAT3 axis_0 = { 1.0f, 1.0f, -1.0f };
-	XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
-	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
-	XMFLOAT4 r_0;
-	XMStoreFloat4(&r_0, rQua_0);
-	entities[0]->SetRotation(r_0);
-
-	// Rotate the Triangle Mesh (1) 
-	XMVECTOR rQua_1 = XMLoadFloat4(&entities[1]->GetRotation());
-	XMFLOAT3 axis_1 = { 0.0f, 0.0f, 1.0f };
-	XMVECTOR newR_1 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_1), deltaTime * 2.0f);
-	rQua_1 = XMQuaternionMultiply(rQua_1, newR_1);
-	XMFLOAT4 r_1;
-	XMStoreFloat4(&r_1, rQua_1);
-	entities[1]->SetRotation(r_1);
-
-	// Move the Circle Mesh (2) in a circle
-	XMFLOAT3 t_2 = { -1.0f + cos(totalTime / 3.0f * 3.1415927f) / 3.0f, 1.0f + sin(totalTime / 3.0f * 3.1415927f) / 3.0f, 0.0f };
-	entities[2]->SetTranslation(t_2);
-
-	// Rotate the Circle Mesh (2) 
-	XMVECTOR rQua_2 = XMLoadFloat4(&entities[2]->GetRotation());
-	XMFLOAT3 axis_2 = { 0.0f, 0.0f, 1.0f };
-	XMVECTOR newR_2 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_2), deltaTime * 8.0f);
-	rQua_2 = XMQuaternionMultiply(rQua_2, newR_2);
-	XMFLOAT4 r_2;
-	XMStoreFloat4(&r_2, rQua_2);
-	entities[2]->SetRotation(r_2);
-
-	// Move the Circle Mesh (4)
-	XMVECTOR tVec_4 = XMLoadFloat3(&entities[4]->GetTranslation());
-	XMFLOAT3 tDir(0.5f * deltaTime * (animationDirection ? 1 : -1), 0.0f, 0.0f);
-	XMVECTOR tDirVec = XMLoadFloat3(&tDir);
-	XMVECTOR newTVec = XMVectorAdd(tVec_4, tDirVec);
-	XMFLOAT3 newT;
-	XMStoreFloat3(&newT, newTVec);
-	if (newT.x > -0.5f || newT.x < -1.5f) animationDirection = !animationDirection;
-	entities[4]->SetTranslation(newT);
-
-	// Rotate the Circle Mesh(4)
-	XMVECTOR rQua_4 = XMLoadFloat4(&entities[4]->GetRotation());
-	XMFLOAT3 axis_4 = { 0.0f, 0.0f, 1.0f };
-	XMVECTOR newR_4 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_4), deltaTime * 4.0f);
-	rQua_4 = XMQuaternionMultiply(rQua_4, newR_4);
-	XMFLOAT4 r_4;
-	XMStoreFloat4(&r_4, rQua_4);
-	entities[4]->SetRotation(r_4);
-
 	// WASD for moving camera
 	XMFLOAT3 forward = camera->GetForward();
 	XMFLOAT3 right = camera->GetRight();
@@ -354,7 +345,6 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		camera->Update(-up.x * speed, -up.y * speed, -up.z * speed, 0.0f, 0.0f);
 	}
-
 
 	// Quit if the escape key is pressed
 	if (GetAsyncKeyState(VK_ESCAPE))
@@ -498,24 +488,6 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
-	XMVECTOR sVec = XMLoadFloat3(&entities[4]->GetScale());
-	sVec = XMVectorScale(sVec, 1.0f + wheelDelta / 10.0f);
-	XMFLOAT3 s;
-	XMStoreFloat3(&s, sVec);
-	entities[4]->SetScale(s);
 
-	//XMVECTOR tVec = XMLoadFloat3(&entities[0]->GetTranslation());
-	//XMFLOAT3 t = { wheelDelta / 10.0f, wheelDelta / 10.0f, 0.0f };
-	//tVec = XMVectorAdd(tVec, XMLoadFloat3(&t));
-	//XMStoreFloat3(&t, tVec);
-	//entities[0]->SetTranslation(t);
-
-	//XMVECTOR rQua = XMLoadFloat4(&entities[0]->GetRotation());
-	//XMFLOAT3 axis = { 1.0f, 1.0f, -1.0f };
-	//XMVECTOR newR = XMQuaternionRotationAxis(XMLoadFloat3(&axis), wheelDelta / 10.0f);
-	//rQua = XMQuaternionMultiply(rQua, newR);
-	//XMFLOAT4 r;
-	//XMStoreFloat4(&r, rQua);
-	//entities[0]->SetRotation(r);
 }
 #pragma endregion
