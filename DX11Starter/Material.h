@@ -6,15 +6,15 @@
 class Material
 {
 public:
-	Material(std::shared_ptr<SimpleVertexShader>& vtxShader, std::shared_ptr<SimplePixelShader>& pxlShader);
+	Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader);
 	~Material();
 
-	SimpleVertexShader* GetVertexShaderPtr();
-	SimplePixelShader* GetPixelShaderPtr();
+	SimpleVertexShader* GetVertexShaderPtr() const;
+	SimplePixelShader* GetPixelShaderPtr() const;
 
 private:
 	// Wrappers for DirectX shaders to provide simplified functionality
-	std::shared_ptr<SimpleVertexShader> vertexShader;
-	std::shared_ptr<SimplePixelShader> pixelShader;
+	SimpleVertexShader* vertexShader;
+	SimplePixelShader* pixelShader;
 };
 

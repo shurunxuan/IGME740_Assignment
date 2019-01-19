@@ -14,8 +14,8 @@ public:
 	DirectX::XMMATRIX& GetViewMatrix();
 	DirectX::XMMATRIX& GetProjectionMatrix();
 
-	DirectX::XMFLOAT3 GetForward();
-	DirectX::XMFLOAT3 GetRight();
+	DirectX::XMFLOAT3 GetForward() const;
+	DirectX::XMFLOAT3 GetRight() const;
 
 private:
 	DirectX::XMFLOAT3 position;

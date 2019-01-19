@@ -58,7 +58,8 @@ void GameEntity::SetScale(const DirectX::XMFLOAT3 s)
 
 void GameEntity::SetRotation(const DirectX::XMFLOAT4 r)
 {
-	rotation = r;
+	const DirectX::XMVECTOR rVec = DirectX::XMQuaternionNormalize(DirectX::XMLoadFloat4(&r));
+	DirectX::XMStoreFloat4(&rotation, rVec);
 	shouldUpdate = true;
 }
 

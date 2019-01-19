@@ -1,7 +1,7 @@
 #include "Material.h"
 
 
-Material::Material(std::shared_ptr<SimpleVertexShader>& vtxShader, std::shared_ptr<SimplePixelShader>& pxlShader)
+Material::Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader)
 {
 	vertexShader = vtxShader;
 	pixelShader = pxlShader;
@@ -14,12 +14,12 @@ Material::~Material()
 	printf("[INFO] Material destroyed at <0x%p>.\n", this);
 }
 
-SimpleVertexShader* Material::GetVertexShaderPtr()
+SimpleVertexShader* Material::GetVertexShaderPtr() const
 {
-	return vertexShader.get();
+	return vertexShader;
 }
 
-SimplePixelShader* Material::GetPixelShaderPtr()
+SimplePixelShader* Material::GetPixelShaderPtr() const
 {
-	return pixelShader.get();
+	return pixelShader;
 }

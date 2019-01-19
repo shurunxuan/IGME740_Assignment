@@ -25,8 +25,6 @@ Game::Game(HINSTANCE hInstance)
 	// Initialize fields
 	vertexBuffer = 0;
 	indexBuffer = 0;
-	defaultVtxShader = 0;
-	defaultPxlShader = 0;
 
 #if defined(DEBUG) || defined(_DEBUG)
 	// Do we want a console window?  Probably only in debug mode
@@ -92,13 +90,11 @@ void Game::Init()
 // --------------------------------------------------------
 void Game::LoadShaders()
 {
-	defaultVtxShader = std::make_shared<SimpleVertexShader>(device, context);
-	defaultPxlShader = std::make_shared<SimplePixelShader>(device, context);
-	//vertexShader = new SimpleVertexShader(device, context);
-	defaultVtxShader->LoadShaderFile(L"VertexShader.cso");
+	vertexShader = new SimpleVertexShader(device, context);
+	vertexShader->LoadShaderFile(L"VertexShader.cso");
 
-	//pixelShader = new SimplePixelShader(device, context);
-	defaultPxlShader->LoadShaderFile(L"PixelShader.cso");
+	pixelShader = new SimplePixelShader(device, context);
+	pixelShader->LoadShaderFile(L"PixelShader.cso");
 }
 
 
@@ -111,40 +107,6 @@ void Game::CreateMatrices()
 {
 	// Create FirstPersonCamera
 	camera = new FirstPersonCamera(float(width), float(height));
-	//// Set up world matrix
-	//// - In an actual game, each object will need one of these and they should
-	////    update when/if the object moves (every frame)
-	//// - You'll notice a "transpose" happening below, which is redundant for
-	////    an identity matrix.  This is just to show that HLSL expects a different
-	////    matrix (column major vs row major) than the DirectX Math library
-	//XMMATRIX W = XMMatrixIdentity();
-	//XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(W)); // Transpose for HLSL!
-
-	//// Create the View matrix
-	//// - In an actual game, recreate this matrix every time the camera 
-	////    moves (potentially every frame)
-	//// - We're using the LOOK TO function, which takes the position of the
-	////    camera and the direction vector along which to look (as well as "up")
-	//// - Another option is the LOOK AT function, to look towards a specific
-	////    point in 3D space
-	//XMVECTOR pos = XMVectorSet(0, 0, -5, 0);
-	//XMVECTOR dir = XMVectorSet(0, 0, 1, 0);
-	//XMVECTOR up = XMVectorSet(0, 1, 0, 0);
-	//XMMATRIX V = XMMatrixLookToLH(
-	//	pos,     // The position of the "camera"
-	//	dir,     // Direction the camera is looking
-	//	up);     // "Up" direction in 3D space (prevents roll)
-	//XMStoreFloat4x4(&viewMatrix, XMMatrixTranspose(V)); // Transpose for HLSL!
-
-	//// Create the Projection matrix
-	//// - This should match the window's aspect ratio, and also update anytime
-	////    the window resizes (which is already happening in OnResize() below)
-	//XMMATRIX P = XMMatrixPerspectiveFovLH(
-	//	0.25f * 3.1415926535f,		// Field of View Angle
-	//	(float)width / height,		// Aspect ratio
-	//	0.1f,						// Near clip plane distance
-	//	100.0f);					// Far clip plane distance
-	//XMStoreFloat4x4(&projectionMatrix, XMMatrixTranspose(P)); // Transpose for HLSL!
 }
 
 #pragma region Icosphere
@@ -276,7 +238,7 @@ void Game::CreateBasicGeometry()
 	const std::shared_ptr<Mesh> meshCube = std::make_shared<Mesh>(verticesCube, 8, indicesCube, 36, device);
 
 	// Create Material
-	std::shared_ptr<Material> unlitMaterial = std::make_shared<Material>(defaultVtxShader, defaultPxlShader);
+	const std::shared_ptr<Material> unlitMaterial = std::make_shared<Material>(vertexShader, pixelShader);
 
 	// Create GameEntity
 	// Initial Transform
@@ -304,13 +266,6 @@ void Game::OnResize()
 	DXCore::OnResize();
 
 	camera->UpdateProjectionMatrix(float(width), float(height), 3.14159265f / 4.0f);
-	//// Update our projection matrix since the window size changed
-	//XMMATRIX P = XMMatrixPerspectiveFovLH(
-	//	0.25f * 3.1415926535f,	// Field of View Angle
-	//	(float)width / height,	// Aspect ratio
-	//	0.1f,				  	// Near clip plane distance
-	//	100.0f);			  	// Far clip plane distance
-	//XMStoreFloat4x4(&projectionMatrix, XMMatrixTranspose(P)); // Transpose for HLSL!
 }
 
 // Several small variables to record the direction of the animation
@@ -324,17 +279,17 @@ void Game::Update(float deltaTime, float totalTime)
 	// Rotate the Cube Meshes
 	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
 	XMFLOAT3 axis_0 = { 1.0f, 1.0f, -1.0f };
-	XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
+	const XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
 	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
-	XMFLOAT4 r_0;
+	XMFLOAT4 r_0{};
 	XMStoreFloat4(&r_0, rQua_0);
 	for (int i = 0; i < entityCount; ++i)
 		entities[i]->SetRotation(r_0);
 
-	// WASD for moving camera
-	XMFLOAT3 forward = camera->GetForward();
-	XMFLOAT3 right = camera->GetRight();
-	XMFLOAT3 up(0.0f, 1.0f, 0.0f);
+	// W, A, S, D for moving camera
+	const XMFLOAT3 forward = camera->GetForward();
+	const XMFLOAT3 right = camera->GetRight();
+	const XMFLOAT3 up(0.0f, 1.0f, 0.0f);
 	const float speed = 2.0f * deltaTime;
 	if (GetAsyncKeyState('W') & 0x8000)
 	{

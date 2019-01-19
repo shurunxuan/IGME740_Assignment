@@ -39,15 +39,8 @@ private:
 	ID3D11Buffer* indexBuffer;
 
 	// Wrappers for DirectX shaders to provide simplified functionality
-	//SimpleVertexShader* vertexShader;
-	//SimplePixelShader* pixelShader;
-	std::shared_ptr<SimpleVertexShader> defaultVtxShader;
-	std::shared_ptr<SimplePixelShader> defaultPxlShader;
-
-	// The matrices to go from model space to screen space
-	DirectX::XMFLOAT4X4 worldMatrix;
-	DirectX::XMFLOAT4X4 viewMatrix;
-	DirectX::XMFLOAT4X4 projectionMatrix;
+	SimpleVertexShader* vertexShader;
+	SimplePixelShader* pixelShader;
 
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
