@@ -3,6 +3,7 @@
 GameEntity::GameEntity()
 {
 	mesh = nullptr;
+	material = nullptr;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f); 
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
@@ -12,9 +13,10 @@ GameEntity::GameEntity()
 
 }
 
-GameEntity::GameEntity(const std::shared_ptr<Mesh> m)
+GameEntity::GameEntity(const std::shared_ptr<Mesh>& m, const std::shared_ptr<Material>& mat)
 {
 	mesh = m;
+	material = mat;
 	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
 	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
@@ -39,7 +41,7 @@ void GameEntity::UpdateWorldMatrix()
 	XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(w));
 
 	shouldUpdate = false;
-	printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
+	//printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
 }
 
 void GameEntity::SetTranslation(const DirectX::XMFLOAT3 t)
@@ -56,7 +58,8 @@ void GameEntity::SetScale(const DirectX::XMFLOAT3 s)
 
 void GameEntity::SetRotation(const DirectX::XMFLOAT4 r)
 {
-	rotation = r;
+	const DirectX::XMVECTOR rVec = DirectX::XMQuaternionNormalize(DirectX::XMLoadFloat4(&r));
+	DirectX::XMStoreFloat4(&rotation, rVec);
 	shouldUpdate = true;
 }
 
@@ -87,6 +90,11 @@ DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrix()
 Mesh* GameEntity::GetMesh() const
 {
 	return mesh.get();
+}
+
+Material * GameEntity::GetMaterial() const
+{
+	return material.get();
 }
 
 void GameEntity::MoveToward(DirectX::XMFLOAT3 direction, const float distance)
