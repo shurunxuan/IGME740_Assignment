@@ -9,7 +9,8 @@ class GameEntity
 {
 public:
 	GameEntity();
-	GameEntity(const std::shared_ptr<Mesh>& m, const std::shared_ptr<Material>& mat);
+	GameEntity(const std::shared_ptr<Mesh>& m);
+	GameEntity(std::vector<std::shared_ptr<Mesh>> m);
 	~GameEntity();
 
 	void SetTranslation(DirectX::XMFLOAT3 t);
@@ -22,21 +23,22 @@ public:
 
 	DirectX::XMFLOAT4X4& GetWorldMatrix();
 
-	Mesh* GetMesh() const;
-	Material* GetMaterial() const;
+	int GetMeshCount() const;
+	Mesh* GetMeshAt(int index) const;
 
 	void MoveToward(DirectX::XMFLOAT3 direction, float distance);
 	void RotateAxis(DirectX::XMFLOAT3 axis, float radian);
 
 private:
+	void InitializeTransform();
 	DirectX::XMFLOAT3 translation{};
 	DirectX::XMFLOAT3 scale{};
 	DirectX::XMFLOAT4 rotation{};
 
 	DirectX::XMFLOAT4X4 worldMatrix{};
 
-	std::shared_ptr<Mesh> mesh;
-	std::shared_ptr<Material> material;
+	int meshCount;
+	std::shared_ptr<Mesh>* meshes;
 
 	bool shouldUpdate = true;
 
