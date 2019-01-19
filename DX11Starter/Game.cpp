@@ -48,8 +48,8 @@ Game::~Game()
 
 	// Delete our simple shader objects, which
 	// will clean up their own internal DirectX stuff
-	//delete vertexShader;
-	//delete pixelShader;
+	delete vertexShader;
+	delete pixelShader;
 
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
