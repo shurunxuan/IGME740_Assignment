@@ -2,31 +2,40 @@
 
 GameEntity::GameEntity()
 {
-	mesh = nullptr;
-	material = nullptr;
-	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f); 
-	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
-	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
-	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
+	meshCount = 0;
+	meshes = nullptr;
+	InitializeTransform();
 
 	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity().\n", this);
 
 }
 
-GameEntity::GameEntity(const std::shared_ptr<Mesh>& m, const std::shared_ptr<Material>& mat)
+GameEntity::GameEntity(const std::shared_ptr<Mesh>& m)
 {
-	mesh = m;
-	material = mat;
-	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
-	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
-	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
-	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
+	meshCount = 1;
+	meshes = new std::shared_ptr<Mesh>[1];
+	meshes[0] = m;
+	InitializeTransform();
 
 	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity(const std::shared_ptr<Mesh> m).\n", this);
 }
 
-GameEntity::~GameEntity() 
+GameEntity::GameEntity(std::vector<std::shared_ptr<Mesh>> m)
 {
+	meshCount = int(m.size());
+	meshes = new std::shared_ptr<Mesh>[meshCount];
+	for (int i = 0; i != meshCount; ++i)
+	{
+		meshes[i] = m[i];
+	}
+	InitializeTransform();
+
+	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity(std::vector<std::shared_ptr<Mesh>> m).\n", this);
+}
+
+GameEntity::~GameEntity()
+{
+	delete[] meshes;
 	printf("[INFO] GameEntity destroyed at <0x%p>.\n", this);
 }
 
@@ -87,14 +96,14 @@ DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrix()
 	return worldMatrix;
 }
 
-Mesh* GameEntity::GetMesh() const
+int GameEntity::GetMeshCount() const
 {
-	return mesh.get();
+	return meshCount;
 }
 
-Material * GameEntity::GetMaterial() const
+Mesh* GameEntity::GetMeshAt(int index) const
 {
-	return material.get();
+	return meshes[index].get();
 }
 
 void GameEntity::MoveToward(DirectX::XMFLOAT3 direction, const float distance)
@@ -115,6 +124,14 @@ void GameEntity::RotateAxis(DirectX::XMFLOAT3 axis, float radian)
 	cur = DirectX::XMQuaternionMultiply(cur, rot);
 
 	XMStoreFloat4(&rotation, cur);
+}
+
+void GameEntity::InitializeTransform()
+{
+	translation = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+	scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
+	XMStoreFloat4(&rotation, DirectX::XMQuaternionIdentity());
+	XMStoreFloat4x4(&worldMatrix, DirectX::XMMatrixIdentity());
 }
 
 

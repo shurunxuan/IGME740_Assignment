@@ -1,11 +1,8 @@
-# Assignment 4 - Cameras & Materials
+# Assignment 5 - Models & Lights
 
 ## Tasks
 
-- [x] Create a camera class that acts like a first person flying camera (with user input)
-- [x] Make sure the camera class properly updates its view and projection matrices
-- [x] Create a material class that represents a set of vertex and pixel shaders
-- [x] Update your entity class to also keep track of its own material
+- [x] Load meshes from external .OBJ files
+- [x] Update C++ and your shaders to support a single diffuse directional light on your objects
+- [x] Add at least one more light to your scene
 - [x] Ensure you have no warnings, memory leaks or DX resource leaks
-
-

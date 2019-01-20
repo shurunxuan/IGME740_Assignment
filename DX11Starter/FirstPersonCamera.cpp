@@ -7,7 +7,7 @@ FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
 	xRotation = 0.0f;
 	yRotation = 0.0f;
 
-	position = DirectX::XMFLOAT3(0, 0, 0);
+	position = DirectX::XMFLOAT3(0, 1, -3);
 	direction = DirectX::XMFLOAT3(0, 0, 1);
 	UpdateViewMatrix();
 

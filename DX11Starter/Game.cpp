@@ -31,7 +31,6 @@ Game::Game(HINSTANCE hInstance)
 	CreateConsoleWindow(500, 120, 32, 120);
 	printf("Console window created successfully.  Feel free to printf() here.\n");
 #endif
-
 }
 
 // --------------------------------------------------------
@@ -51,6 +50,8 @@ Game::~Game()
 	delete vertexShader;
 	delete pixelShader;
 
+	delete unlitShader;
+  
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -61,6 +62,9 @@ Game::~Game()
 
 	// Delete Camera
 	delete camera;
+
+	// Delete Light
+	delete[] lights;
 }
 
 // --------------------------------------------------------
@@ -95,6 +99,25 @@ void Game::LoadShaders()
 
 	pixelShader = new SimplePixelShader(device, context);
 	pixelShader->LoadShaderFile(L"PixelShader.cso");
+
+	unlitShader = new SimplePixelShader(device, context);
+	unlitShader->LoadShaderFile(L"UnlitShader.cso");
+
+	Material::GetDefault()->SetVertexShaderPtr(vertexShader);
+	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
+
+	// Initialize Light
+	lightCount = 2;
+	lights = new DirectionalLight[lightCount];
+
+	lights[0].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].DiffuseColor = XMFLOAT4(0.9372549019607843f, 0.8549019607843137f, 0.4666666666666667f, 1.0f);
+	lights[0].Direction = XMFLOAT3(1.0f, -1.0f, 0.0f);
+
+	lights[1].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[1].DiffuseColor = XMFLOAT4(0.9843137254901961f, 0.6823529411764706f, 0.0627450980392157f, 1.0f);
+	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
+
 }
 
 
@@ -109,150 +132,100 @@ void Game::CreateMatrices()
 	camera = new FirstPersonCamera(float(width), float(height));
 }
 
-#pragma region Icosphere
-struct Triangle
-{
-	int vertex[3];
-};
-
-namespace icosahedron
-{
-	const float X = .525731112119133606f;
-	const float Z = .850650808352039932f;
-	const float N = 0.f;
-
-	static const std::vector<XMFLOAT3> vertices =
-	{
-		{-X, N, Z}, {X, N, Z}, {-X, N, -Z}, {X, N, -Z},
-		{N, Z, X}, {N, Z, -X}, {N, -Z, X}, {N, -Z, -X},
-		{Z, X, N}, {-Z, X, N}, {Z, -X, N}, {-Z, -X, N}
-	};
-
-	static const std::vector<Triangle> triangles =
-	{
-		{0, 4, 1}, {0, 9, 4}, {9, 5, 4}, {4, 5, 8}, {4, 8, 1},
-		{8, 10, 1}, {8, 3, 10}, {5, 3, 8}, {5, 2, 3}, {2, 7, 3},
-		{7, 10, 3}, {7, 6, 10}, {7, 11, 6}, {11, 0, 6}, {0, 1, 6},
-		{6, 1, 10}, {9, 0, 11}, {9, 11, 2}, {9, 2, 5}, {7, 2, 11}
-	};
-}
-
-std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> MakeSphere(int subdivisions)
-{
-	std::vector<XMFLOAT3> vertices = icosahedron::vertices;
-	std::vector<Triangle> triangles = icosahedron::triangles;
-
-	for (int i = 0; i < subdivisions; ++i)
-	{
-		std::map<std::pair<int, int>, int> lookup;
-		std::vector<Triangle> result;
-		result.reserve(int(pow(4, i)) * 80);
-
-		for (Triangle& triangle : triangles)
-		{
-			std::array<int, 3> mid{};
-			for (int vtx = 0; vtx < 3; ++vtx)
-			{
-				//mid[edge] = VertexForEdge(lookup, vertices,
-				//	triangle.vertex[edge], triangle.vertex[(edge + 1) % 3]);
-				int v1 = triangle.vertex[vtx];
-				int v2 = triangle.vertex[(vtx + 1) % 3];
-				std::pair<int, int> key(v1, v2);
-				if (key.first > key.second)
-					std::swap(key.first, key.second);
-
-				const std::pair<std::map<std::pair<int, int>, int>::iterator, bool> inserted = lookup.insert({
-					key, int(vertices.size())
-					});
-				if (inserted.second)
-				{
-					XMFLOAT3& vertex0 = vertices[v1];
-					XMFLOAT3& vertex1 = vertices[v2];
-					const XMVECTOR midVertex = XMVector3Normalize(XMLoadFloat3(&vertex0) + XMLoadFloat3(&vertex1));
-					XMFLOAT3 v{};
-					XMStoreFloat3(&v, midVertex);
-					vertices.push_back(v);
-				}
-
-				mid[vtx] = inserted.first->second;
-			}
-
-			result.push_back({ triangle.vertex[0], mid[0], mid[2] });
-			result.push_back({ triangle.vertex[1], mid[1], mid[0] });
-			result.push_back({ triangle.vertex[2], mid[2], mid[1] });
-			result.push_back({ mid[0], mid[1], mid[2] });
-		}
-
-		triangles = result;
-	}
-
-	return{ vertices, triangles };
-}
-
-#pragma endregion 
-
 // --------------------------------------------------------
 // Creates the geometry we're going to draw - a single triangle for now
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	// Create some temporary variables to represent colors
-	// - Not necessary, just makes things more readable
-	const XMFLOAT4 red = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-	const XMFLOAT4 green = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
-	const XMFLOAT4 blue = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
-	const XMFLOAT4 yellow = XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
-	const XMFLOAT4 cyan = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
-	const XMFLOAT4 magenta = XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f);
-	const XMFLOAT4 white = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	const XMFLOAT4 black = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	std::string filename;
 
-	// Create GameEntity data
-	const std::pair<std::vector<XMFLOAT3>, std::vector<Triangle>> sphere =
-		MakeSphere(4);
-	std::vector<XMFLOAT3> positions = sphere.first;
-	entityCount = int(positions.size());
+	// Open a file
+	OPENFILENAME ofn;
+	char fileBuf[260];
+	char pathBuf[260];
+	int bytes = GetModuleFileName(NULL, pathBuf, 260);
+	for (--bytes; bytes != 0; --bytes)
+	{
+		if (pathBuf[bytes] == '\\')
+			break;
+	}
+	pathBuf[bytes] = '\0';
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = hWnd;
+	ofn.lpstrFile = fileBuf;
+	ofn.lpstrFile[0] = '\0';
+	ofn.nMaxFile = sizeof(fileBuf);
+	ofn.lpstrFilter = "OBJ Model file\0*.obj\0";
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFileTitle = nullptr;
+	ofn.nMaxFileTitle = 0;
+	ofn.lpstrInitialDir = pathBuf;
+	ofn.lpstrTitle = "Choose a model";
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	// Display the Open dialog box. 
+
+	if (GetOpenFileName(&ofn))
+	{
+		filename = fileBuf;
+	}
+	else
+	{
+		// Direct junction for folder "models" is already created in post-build events.
+		filename = "models\\helix.obj";
+		printf("[WARNING] No file chosen. Fallback to default file \"%s\".\n", filename.c_str());
+	}
+
+	const auto modelData = Mesh::LoadFromFile(filename, device);
+
+	// The shaders are not set yet so we need to set it now.
+	for (const std::shared_ptr<Material>& mat : modelData.second)
+	{
+		mat->SetVertexShaderPtr(vertexShader);
+		mat->SetPixelShaderPtr(pixelShader);
+	}
+
+	const int mapSize = 15;
+
+	entityCount = 2;
 	entities = new GameEntity*[entityCount];
 
-	// Create a cube mesh
-	Vertex verticesCube[] =
+
+	// Create GameEntity & Initial Transform
+	entities[0] = new GameEntity(modelData.first);
+	entities[0]->SetTranslation(XMFLOAT3(0.0f, 0.25f, 5.0f));
+	entities[0]->SetScale(XMFLOAT3(0.5f, 0.5f, 0.5f));
+
+	// Create some black/white tiles
+	const std::shared_ptr<Material> unlit = std::make_shared<Material>(vertexShader, unlitShader);
+
+	std::vector<std::shared_ptr<Mesh>> meshes;
+	meshes.reserve(mapSize * mapSize);
+
+	const float mapH = (mapSize - 1) / 2.0f;
+	for (int i = 0; i < mapSize; ++i)
 	{
-		{ XMFLOAT3(+1.0f, +1.0f, -1.0f), white },
-		{ XMFLOAT3(+1.0f, +1.0f, +1.0f), red },
-		{ XMFLOAT3(-1.0f, +1.0f, +1.0f), yellow },
-		{ XMFLOAT3(-1.0f, +1.0f, -1.0f), green },
-		{ XMFLOAT3(-1.0f, -1.0f, -1.0f), cyan },
-		{ XMFLOAT3(+1.0f, -1.0f, -1.0f), blue },
-		{ XMFLOAT3(+1.0f, -1.0f, +1.0f), magenta },
-		{ XMFLOAT3(-1.0f, -1.0f, +1.0f), black },
-	};
+		for (int j = 0; j < mapSize; ++j)
+		{
+			const auto c = float((i + j) % 2);
+			// Using unlit shader so normal and uv doesn't matter
+			Vertex vtx[4] = {
+				{XMFLOAT3(-0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(-0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(+0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(+0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+			};
+			int idx[6] = { 0, 1, 2, 0, 2, 3 };
 
-	int indicesCube[] = {
-		0, 1, 6, 0, 6, 5,
-		0, 5, 4, 0, 4, 3,
-		0, 3, 2, 0, 2, 1,
-		7, 6, 1, 7, 1, 2,
-		7, 2, 3, 7, 3, 4,
-		7, 4, 5, 7, 5, 6,
-	};
-	const std::shared_ptr<Mesh> meshCube = std::make_shared<Mesh>(verticesCube, 8, indicesCube, 36, device);
-
-	// Create Material
-	const std::shared_ptr<Material> unlitMaterial = std::make_shared<Material>(vertexShader, pixelShader);
-
-	// Create GameEntity
-	// Initial Transform
-	for (int i = 0; i < entityCount; ++i)
-	{
-		entities[i] = new GameEntity(meshCube, unlitMaterial);
-		entities[i]->SetScale(XMFLOAT3(0.02f, 0.02f, 0.02f));
-
-		XMVECTOR pos = XMLoadFloat3(&*(positions.begin() + i));
-		pos = XMVectorScale(pos, 3.0f);
-		XMFLOAT3 t{};
-		XMStoreFloat3(&t, pos);
-		entities[i]->SetTranslation(t);
+			std::shared_ptr<Mesh> m = std::make_shared<Mesh>(vtx, 4, idx, 6, device);
+			m->SetMaterial(unlit);
+			meshes.push_back(m);
+		}
 	}
+
+	entities[1] = new GameEntity(meshes);
+	entities[1]->SetTranslation(XMFLOAT3(0.0f, 0.0f, 5.0f));
 }
 
 
@@ -276,21 +249,24 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
-	// Rotate the Cube Meshes
+	// Rotate the Mesh
 	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
-	XMFLOAT3 axis_0 = { 1.0f, 1.0f, -1.0f };
+	XMFLOAT3 axis_0 = { 0.0f, 1.0f, 0.0f };
 	const XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
 	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
 	XMFLOAT4 r_0{};
 	XMStoreFloat4(&r_0, rQua_0);
-	for (int i = 0; i < entityCount; ++i)
-		entities[i]->SetRotation(r_0);
+	entities[0]->SetRotation(r_0);
 
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
 	const XMFLOAT3 up(0.0f, 1.0f, 0.0f);
-	const float speed = 2.0f * deltaTime;
+	float speed = 2.0f * deltaTime;
+	if (GetAsyncKeyState(VK_LSHIFT))
+	{
+		speed *= 4.0f;
+	}
 	if (GetAsyncKeyState('W') & 0x8000)
 	{
 		camera->Update(forward.x * speed, forward.y * speed, forward.z * speed, 0.0f, 0.0f);
@@ -344,51 +320,65 @@ void Game::Draw(float deltaTime, float totalTime)
 
 	for (int i = 0; i < entityCount; ++i)
 	{
-		// Send data to shader variables
-		//  - Do this ONCE PER OBJECT you're drawing
-		//  - This is actually a complex process of copying data to a local buffer
-		//    and then copying that entire buffer to the GPU.  
-		//  - The "SimpleShader" class handles all of that for you.
-		XMFLOAT4X4 viewMat{};
-		XMFLOAT4X4 projMat{};
-		XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
-		XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
-		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
-		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
-		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
+		for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+		{
+			// Send data to shader variables
+			//  - Do this ONCE PER OBJECT you're drawing
+			//  - This is actually a complex process of copying data to a local buffer
+			//    and then copying that entire buffer to the GPU.  
+			//  - The "SimpleShader" class handles all of that for you.
+			XMFLOAT4X4 viewMat{};
+			XMFLOAT4X4 projMat{};
+			XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
+			XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 
-		// Once you've set all of the data you care to change for
-		// the next draw call, you need to actually send it to the GPU
-		//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
-		entities[i]->GetMaterial()->GetVertexShaderPtr()->CopyAllBufferData();
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"light0",					// The name of the (eventual) variable in the shader
+				lights,							// The address of the data to copy
+				sizeof(DirectionalLight));		// The size of the data to copy
 
-		// Set the vertex and pixel shaders to use for the next Draw() command
-		//  - These don't technically need to be set every frame...YET
-		//  - Once you start applying different shaders to different objects,
-		//    you'll need to swap the current shaders before each draw
-		entities[i]->GetMaterial()->GetVertexShaderPtr()->SetShader();
-		entities[i]->GetMaterial()->GetPixelShaderPtr()->SetShader();
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"light1",					// The name of the (eventual) variable in the shader
+				lights + 1,							// The address of the data to copy
+				sizeof(DirectionalLight));		// The size of the data to copy
+
+			// Once you've set all of the data you care to change for
+			// the next draw call, you need to actually send it to the GPU
+			//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->CopyAllBufferData();
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->CopyAllBufferData();
+
+			// Set the vertex and pixel shaders to use for the next Draw() command
+			//  - These don't technically need to be set every frame...YET
+			//  - Once you start applying different shaders to different objects,
+			//    you'll need to swap the current shaders before each draw
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetShader();
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShader();
 
 
-		ID3D11Buffer* vertexBuffer = entities[i]->GetMesh()->GetVertexBuffer();
-		ID3D11Buffer* indexBuffer = entities[i]->GetMesh()->GetIndexBuffer();
-		// Set buffers in the input assembler
-		//  - Do this ONCE PER OBJECT you're drawing, since each object might
-		//    have different geometry.
-		UINT stride = sizeof(Vertex);
-		UINT offset = 0;
-		context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
-		context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+			ID3D11Buffer* vertexBuffer = entities[i]->GetMeshAt(j)->GetVertexBuffer();
+			ID3D11Buffer* indexBuffer = entities[i]->GetMeshAt(j)->GetIndexBuffer();
+			// Set buffers in the input assembler
+			//  - Do this ONCE PER OBJECT you're drawing, since each object might
+			//    have different geometry.
+			UINT stride = sizeof(Vertex);
+			UINT offset = 0;
+			context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+			context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-		// Finally do the actual drawing
-		//  - Do this ONCE PER OBJECT you intend to draw
-		//  - This will use all of the currently set DirectX "stuff" (shaders, buffers, etc)
-		//  - DrawIndexed() uses the currently set INDEX BUFFER to look up corresponding
-		//     vertices in the currently set VERTEX BUFFER
-		context->DrawIndexed(
-			entities[i]->GetMesh()->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
-			0,								// Offset to the first index we want to use
-			0);								// Offset to add to each index when looking up vertices
+			// Finally do the actual drawing
+			//  - Do this ONCE PER OBJECT you intend to draw
+			//  - This will use all of the currently set DirectX "stuff" (shaders, buffers, etc)
+			//  - DrawIndexed() uses the currently set INDEX BUFFER to look up corresponding
+			//     vertices in the currently set VERTEX BUFFER
+			context->DrawIndexed(
+				entities[i]->GetMeshAt(j)->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
+				0,								// Offset to the first index we want to use
+				0);								// Offset to add to each index when looking up vertices
+		}
 	}
 
 
@@ -415,7 +405,7 @@ void Game::OnMouseDown(WPARAM buttonState, int x, int y)
 	prevMousePos.x = x;
 	prevMousePos.y = y;
 
-	// Caputure the mouse so we keep getting mouse move
+	// Capture the mouse so we keep getting mouse move
 	// events even if the mouse leaves the window.  we'll be
 	// releasing the capture once a mouse button is released
 	SetCapture(hWnd);
@@ -441,9 +431,12 @@ void Game::OnMouseUp(WPARAM buttonState, int x, int y)
 void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 {
 	// Add any custom code here...
-	const LONG deltaX = x - prevMousePos.x;
-	const LONG deltaY = y - prevMousePos.y;
-	camera->Update(0.0f, 0.0f, 0.0f, deltaX * 0.001f, deltaY * 0.001f);
+	if (buttonState & MK_LBUTTON)
+	{
+		const LONG deltaX = x - prevMousePos.x;
+		const LONG deltaY = y - prevMousePos.y;
+		camera->Update(0.0f, 0.0f, 0.0f, deltaX * 0.001f, deltaY * 0.001f);
+	}
 
 	// Save the previous mouse position, so we have it for the future
 	prevMousePos.x = x;
@@ -458,6 +451,22 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
+	const float scale = 1.0f + wheelDelta / 3.0f;
 
+	XMFLOAT3 objTranslation = entities[0]->GetTranslation();
+	const float zTemp = objTranslation.z;
+	XMFLOAT3 objScale = entities[0]->GetScale();
+
+	XMVECTOR vec = XMLoadFloat3(&objTranslation);
+	vec = XMVectorScale(vec, scale);
+	XMStoreFloat3(&objTranslation, vec);
+	objTranslation.z = zTemp;
+
+	vec = XMLoadFloat3(&objScale);
+	vec = XMVectorScale(vec, scale);
+	XMStoreFloat3(&objScale, vec);
+
+	entities[0]->SetTranslation(objTranslation);
+	entities[0]->SetScale(objScale);
 }
 #pragma endregion

@@ -1,10 +1,17 @@
 #include <cstdio>
+#include <map>
+#include <sstream>
+#include <fstream>
+#include <DirectXMath.h>
 #include "Mesh.h"
+#include <set>
+#include <utility>
 
 
 Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, ID3D11Device* device)
 {
 	indexCount = indicesCount;
+	material = nullptr;
 
 	// Create the VERTEX BUFFER description -----------------------------------
 	// - The description is created on the stack because we only need
@@ -63,4 +70,304 @@ Mesh::~Mesh()
 	if (indexBuffer) { indexBuffer->Release(); }
 
 	printf("[INFO] Mesh destroyed at <0x%p>.\n", this);
+}
+
+std::vector<std::string> split(std::string str, char ch)
+{
+	std::vector<std::string> result;
+	std::string temp(std::move(str));
+	size_t pos;
+
+	while ((pos = temp.find(ch)) != std::string::npos)
+	{
+		std::string s(temp.begin(), temp.begin() + pos);
+		result.push_back(s);
+		temp = std::string(temp.begin() + pos + 1, temp.end());
+	}
+	result.push_back(temp);
+
+	return result;
+}
+
+template <typename T>
+T str2num(const std::string& str, T& num)
+{
+	std::stringstream ss;
+	ss << str;
+	ss >> num;
+	return num;
+}
+
+Material* Mesh::GetMaterial() const
+{
+	if (material == nullptr)
+	{
+		printf("[WARNING] Material of Mesh <0x%p> is not set! Fallback to default material.\n", this);
+		return Material::GetDefault().get();
+	}
+
+	return material.get();
+}
+
+void Mesh::SetMaterial(std::shared_ptr<Material> m)
+{
+	material = std::move(m);
+}
+
+std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string& filename, ID3D11Device* device)
+{
+	std::vector<std::shared_ptr<Mesh>> meshList;
+	std::vector<std::shared_ptr<Material>> materialList;
+	std::map<std::string, std::shared_ptr<Material>> materialMap;
+
+	std::vector<DirectX::XMFLOAT3> positions;
+	std::vector<DirectX::XMFLOAT3> normals;
+	std::vector<DirectX::XMFLOAT2> texcoords;
+
+	std::vector<std::vector<int>> indices;
+	std::vector<std::vector<int>> vertices;
+
+	std::vector<std::string> mtlOfMeshes;
+
+	int* indexBuffer = nullptr;
+	Vertex* vertexBuffer = nullptr;
+
+	std::string currentMtl;
+
+	materialMap[""] = Material::GetDefault();
+
+	// Read .obj file
+	std::ifstream fin(filename);
+	printf("[INFO] OBJ file \"%s\" opened.\n", filename.c_str());
+	std::string line;
+	std::string mtlFile;
+	std::string folder;
+	while (getline(fin, line))
+	{
+		auto s = split(line, ' ');
+		std::string first_token(s[0]);
+		if (first_token == "mtllib")
+		{
+			auto base = split(filename, '\\');
+			mtlFile = "";
+			for (unsigned i = 0; i != base.size() - 1; ++i)
+			{
+				folder += base[i] + "\\";
+			}
+			mtlFile = folder + s[1];
+		}
+		if (first_token == "v")
+		{
+			DirectX::XMFLOAT3 v = {};
+			str2num(s[1], v.x);
+			str2num(s[2], v.y);
+			str2num(s[3], v.z);
+			v.z *= -1.0f;
+			positions.push_back(v);
+
+		}
+		else if (first_token == "vn")
+		{
+			DirectX::XMFLOAT3 n = {};
+			str2num(s[1], n.x);
+			str2num(s[2], n.y);
+			str2num(s[3], n.z);
+			n.z *= -1.0f;
+			normals.push_back(n);
+		}
+		else if (first_token == "vt")
+		{
+			DirectX::XMFLOAT2 t = {};
+			str2num(s[1], t.x);
+			str2num(s[2], t.y);
+			t.y = 1.0f - t.y;
+			texcoords.push_back(t);
+		}
+		else if (first_token == "f")
+		{
+			int index[4];
+			for (unsigned i = 0; i != s.size() - 1; ++i)
+			{
+				std::string p(s[i + 1]);
+				auto p_detail = split(p, '/');
+				int v = -1, n = -1, t = -1;
+				str2num(p_detail[0], v);
+				str2num(p_detail[1], t);
+				str2num(p_detail[2], n);
+
+				std::vector<int> vertexData = { v, n, t };
+
+				unsigned findResult = unsigned(std::find(vertices.begin(), vertices.end(), vertexData) - vertices.begin());
+				if (findResult == vertices.size())
+				{
+					vertices.push_back(vertexData);
+				}
+				index[i] = findResult;
+			}
+			indices.push_back({ index[0], index[2], index[1] });
+
+			if (s.size() == 5)
+			{
+				// 4th face
+				indices.push_back({ index[0], index[3], index[2] });
+			}
+		}
+		else if (first_token == "usemtl")
+		{
+			if (!currentMtl.empty())
+			{
+				// Create new mesh
+				indexBuffer = new int[indices.size() * 3];
+				vertexBuffer = new Vertex[vertices.size()];
+				// Generate indexBuffer
+				for (unsigned i = 0; i != indices.size(); ++i)
+				{
+					for (unsigned j = 0; j < 3; ++j)
+					{
+						indexBuffer[i * 3 + j] = indices[i][j];
+					}
+				}
+				// Generate vertexBuffer
+				int i = 0;
+				for (auto& it : vertices)
+				{
+					Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
+					vertexBuffer[i] = vtx;
+					++i;
+				}
+				std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size()) * 3, device);
+				meshList.push_back(newMesh);
+				mtlOfMeshes.push_back(currentMtl);
+
+				delete[] indexBuffer;
+				delete[] vertexBuffer;
+
+				indices.clear();
+				vertices.clear();
+			}
+
+			currentMtl = s[1];
+		}
+	}
+
+	// Create new mesh
+	indexBuffer = new int[indices.size() * 3];
+	vertexBuffer = new Vertex[vertices.size()];
+	// Generate indexBuffer
+	for (unsigned i = 0; i != indices.size(); ++i)
+	{
+		for (unsigned j = 0; j < 3; ++j)
+		{
+			indexBuffer[i * 3 + j] = indices[i][j];
+		}
+	}
+	// Generate vertexBuffer
+	int i = 0;
+	for (auto& it : vertices)
+	{
+		Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
+		vertexBuffer[i] = vtx;
+		++i;
+	}
+	std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size() * 3), device);
+	meshList.push_back(newMesh);
+	mtlOfMeshes.push_back(currentMtl);
+
+	delete[] indexBuffer;
+	delete[] vertexBuffer;
+
+	indices.clear();
+	vertices.clear();
+
+	// Read .mtl file
+	if (!mtlFile.empty())
+	{
+		std::ifstream mltFin(mtlFile);
+		printf("[INFO] MTL file \"%s\" opened.\n", mtlFile.c_str());
+		std::string mtlLine;
+		std::shared_ptr<Material> current_mtl = nullptr;
+		std::string currentName;
+		while (getline(mltFin, mtlLine))
+		{
+			auto s = split(mtlLine, ' ');
+			std::string first_token(s[0]);
+			if (first_token == "newmtl")
+			{
+				if (current_mtl != nullptr)
+				{
+					// save last material
+					materialList.push_back(current_mtl);
+					materialMap[currentName] = current_mtl;
+				}
+
+				currentName = s[1];
+				current_mtl = std::make_shared<Material>();
+			}
+			else if (first_token == "Kd")
+			{
+				float r, g, b;
+				str2num(s[1], r);
+				str2num(s[2], g);
+				str2num(s[3], b);
+				current_mtl->diffuse = DirectX::XMFLOAT3(1, 1, 1);
+			}
+			else if (first_token == "Ka")
+			{
+				float r, g, b;
+				str2num(s[1], r);
+				str2num(s[2], g);
+				str2num(s[3], b);
+				current_mtl->ambient = DirectX::XMFLOAT3(r, g, b);
+			}
+			else if (first_token == "Ks")
+			{
+				float r, g, b;
+				str2num(s[1], r);
+				str2num(s[2], g);
+				str2num(s[3], b);
+				current_mtl->specular = DirectX::XMFLOAT3(1, 1, 1);
+			}
+			else if (first_token == "Ke")
+			{
+				float r, g, b;
+				str2num(s[1], r);
+				str2num(s[2], g);
+				str2num(s[3], b);
+				current_mtl->emission = DirectX::XMFLOAT3(r, g, b);
+			}
+			else if (first_token == "Ns")
+			{
+				current_mtl->shininess = 20;
+				//str2num(s[1], current_mtl->shininess);
+			}
+			else if (first_token == "map_Kd")
+			{
+				// texture file
+				std::string name = folder + s[1];
+
+				printf("[INFO] Load texture file \"%s\".\n", name.c_str());
+
+				printf("[WARNING] \"Load texture\" is a placeholder logic.\n");
+			}
+		}
+
+		// save last material
+		materialList.push_back(current_mtl);
+		materialMap[currentName] = current_mtl;
+	}
+	else
+	{
+		printf("[INFO] No mtl data in file \"%s\" found. Fallback to default material.\n", filename.c_str());
+		materialList.push_back(Material::GetDefault());
+	}
+
+	// Set Material of Mesh
+	for (unsigned m = 0; m != meshList.size(); ++m)
+	{
+		meshList[m]->SetMaterial(materialMap[mtlOfMeshes[m]]);
+	}
+
+
+	std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> result(meshList, materialList);
+	return result;
 }
