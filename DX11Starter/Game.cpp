@@ -51,8 +51,6 @@ Game::~Game()
 	// will clean up their own internal DirectX stuff
 	delete vertexShader;
 	delete pixelShader;
-
-	delete unlitShader;
   
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
@@ -101,9 +99,6 @@ void Game::LoadShaders()
 
 	pixelShader = new SimplePixelShader(device, context);
 	pixelShader->LoadShaderFile(L"PixelShader.cso");
-
-	unlitShader = new SimplePixelShader(device, context);
-	unlitShader->LoadShaderFile(L"UnlitShader.cso");
 
 	Material::GetDefault()->SetVertexShaderPtr(vertexShader);
 	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
