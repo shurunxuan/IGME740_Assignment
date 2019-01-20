@@ -1,5 +1,7 @@
 # IGME.740.01 - Game Graphics Programming Individual Assignments
 
+Download 3D models for Assignment 4 and later ones [here](https://github.com/shurunxuan/IGME740_Assignment/releases/download/MDL/models.7z). Put the folder under `IGME740_Assignment\DX11Starter` where you can see the source files. Make sure the `models` folder is not nested with itself.
+
 ## [Assignment 1 - Starter Code](https://github.com/shurunxuan/IGME740_Assignment/releases/tag/AS1)
 
 - [x]	Download the starter code and ensure it runs
