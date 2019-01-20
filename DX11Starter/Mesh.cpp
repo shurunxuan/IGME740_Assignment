@@ -2,10 +2,12 @@
 #include <map>
 #include <sstream>
 #include <fstream>
-#include <DirectXMath.h>
-#include "Mesh.h"
-#include <set>
 #include <utility>
+#include <locale>
+#include <codecvt>
+#include <DirectXMath.h>
+#include <WICTextureLoader.h>
+#include "Mesh.h"
 
 
 Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, ID3D11Device* device)
@@ -114,7 +116,7 @@ void Mesh::SetMaterial(std::shared_ptr<Material> m)
 	material = std::move(m);
 }
 
-std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string& filename, ID3D11Device* device)
+std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	std::vector<std::shared_ptr<Mesh>> meshList;
 	std::vector<std::shared_ptr<Material>> materialList;
@@ -193,7 +195,8 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				int v = -1, n = -1, t = -1;
 				str2num(p_detail[0], v);
 				str2num(p_detail[1], t);
-				str2num(p_detail[2], n);
+				if (p_detail.size() > 2)
+					str2num(p_detail[2], n);
 
 				std::vector<int> vertexData = { v, n, t };
 
@@ -231,8 +234,19 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				int i = 0;
 				for (auto& it : vertices)
 				{
-					Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
-					vertexBuffer[i] = vtx;
+					// No normal data
+					DirectX::XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
+					if (it[1] < 0)
+					{
+						Vertex vtx{ positions[it[0] - 1], zero, texcoords[it[2] - 1] };
+						vertexBuffer[i] = vtx;
+					}
+					else
+					{
+						Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
+						vertexBuffer[i] = vtx;
+					}
+					
 					++i;
 				}
 				std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size()) * 3, device);
@@ -265,8 +279,18 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	int i = 0;
 	for (auto& it : vertices)
 	{
-		Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
-		vertexBuffer[i] = vtx;
+		// No normal data
+		DirectX::XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
+		if (it[1] < 0)
+		{
+			Vertex vtx{ positions[it[0] - 1], zero, texcoords[it[2] - 1] };
+			vertexBuffer[i] = vtx;
+		}
+		else
+		{
+			Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
+			vertexBuffer[i] = vtx;
+		}
 		++i;
 	}
 	std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size() * 3), device);
@@ -301,7 +325,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				}
 
 				currentName = s[1];
-				current_mtl = std::make_shared<Material>();
+				current_mtl = std::make_shared<Material>(device);
 			}
 			else if (first_token == "Kd")
 			{
@@ -344,10 +368,20 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 			{
 				// texture file
 				std::string name = folder + s[1];
+				// string -> wstring
+				std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
+				std::wstring wName = cv.from_bytes(name);
 
-				printf("[INFO] Load texture file \"%s\".\n", name.c_str());
-
-				printf("[WARNING] \"Load texture\" is a placeholder logic.\n");
+				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->srvPtr);
+				if (FAILED(hr))
+				{
+					printf("[WARNING] Failed to load texture file \"%s\".\n", name.c_str());
+				}
+				else
+				{
+					printf("[INFO] Load texture file \"%s\".\n", name.c_str());
+					current_mtl->InitializeSampler();
+				}
 			}
 		}
 
