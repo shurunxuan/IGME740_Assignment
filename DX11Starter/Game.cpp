@@ -140,23 +140,27 @@ void Game::CreateBasicGeometry()
 	std::string filename;
 
 	// Open a file
-	OPENFILENAME ofn;       // common dialog box structure
-	char szFile[260];       // buffer for file name
-
-	// Initialize OPENFILENAME
+	OPENFILENAME ofn;
+	char fileBuf[260];
+	char pathBuf[260];
+	int bytes = GetModuleFileName(NULL, pathBuf, 260);
+	for (--bytes; bytes != 0; --bytes)
+	{
+		if (pathBuf[bytes] == '\\')
+			break;
+	}
+	pathBuf[bytes] = '\0';
 	ZeroMemory(&ofn, sizeof(ofn));
 	ofn.lStructSize = sizeof(ofn);
 	ofn.hwndOwner = hWnd;
-	ofn.lpstrFile = szFile;
-	// Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
-	// use the contents of szFile to initialize itself.
+	ofn.lpstrFile = fileBuf;
 	ofn.lpstrFile[0] = '\0';
-	ofn.nMaxFile = sizeof(szFile);
+	ofn.nMaxFile = sizeof(fileBuf);
 	ofn.lpstrFilter = "OBJ Model file\0*.obj\0";
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = nullptr;
 	ofn.nMaxFileTitle = 0;
-	ofn.lpstrInitialDir = nullptr;
+	ofn.lpstrInitialDir = pathBuf;
 	ofn.lpstrTitle = "Choose a model";
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
@@ -164,11 +168,12 @@ void Game::CreateBasicGeometry()
 
 	if (GetOpenFileName(&ofn))
 	{
-		filename = szFile;
+		filename = fileBuf;
 	}
 	else
 	{
-		filename = "D:\\models\\cone.obj";
+		// Direct junction for folder "models" is already created in post-build events.
+		filename = "models\\helix.obj";
 		printf("[WARNING] No file chosen. Fallback to default file \"%s\".\n", filename.c_str());
 	}
 
