@@ -5,6 +5,7 @@
 #include <DirectXMath.h>
 #include "Mesh.h"
 #include <set>
+#include <utility>
 
 
 Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, ID3D11Device* device)
@@ -74,7 +75,7 @@ Mesh::~Mesh()
 std::vector<std::string> split(std::string str, char ch)
 {
 	std::vector<std::string> result;
-	std::string temp(str);
+	std::string temp(std::move(str));
 	size_t pos;
 
 	while ((pos = temp.find(ch)) != std::string::npos)
@@ -89,7 +90,7 @@ std::vector<std::string> split(std::string str, char ch)
 }
 
 template <typename T>
-T str2num(std::string str, T& num)
+T str2num(const std::string& str, T& num)
 {
 	std::stringstream ss;
 	ss << str;
@@ -110,7 +111,7 @@ Material* Mesh::GetMaterial() const
 
 void Mesh::SetMaterial(std::shared_ptr<Material> m)
 {
-	material = m;
+	material = std::move(m);
 }
 
 std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string& filename, ID3D11Device* device)
@@ -124,7 +125,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	std::vector<DirectX::XMFLOAT2> texcoords;
 
 	std::vector<std::vector<int>> indices;
-	std::vector<std::vector<int>> vertexSet;
+	std::vector<std::vector<int>> vertices;
 
 	std::vector<std::string> mtlOfMeshes;
 
@@ -137,9 +138,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 
 	// Read .obj file
 	std::ifstream fin(filename);
-	printf("[INFO] OBJ file \"");
-	printf(filename.c_str());
-	printf("\" opened.\n");
+	printf("[INFO] OBJ file \"%s\" opened.\n", filename.c_str());
 	std::string line;
 	std::string mtlFile;
 	std::string folder;
@@ -151,7 +150,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 		{
 			auto base = split(filename, '\\');
 			mtlFile = "";
-			for (int i = 0; i != base.size() - 1; ++i)
+			for (unsigned i = 0; i != base.size() - 1; ++i)
 			{
 				folder += base[i] + "\\";
 			}
@@ -187,7 +186,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 		else if (first_token == "f")
 		{
 			int index[4];
-			for (int i = 0; i < s.size() - 1; ++i)
+			for (unsigned i = 0; i != s.size() - 1; ++i)
 			{
 				std::string p(s[i + 1]);
 				auto p_detail = split(p, '/');
@@ -198,10 +197,10 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 
 				std::vector<int> vertexData = { v, n, t };
 
-				int findResult = int(std::find(vertexSet.begin(), vertexSet.end(), vertexData) - vertexSet.begin());
-				if (findResult == vertexSet.size())
+				unsigned findResult = unsigned(std::find(vertices.begin(), vertices.end(), vertexData) - vertices.begin());
+				if (findResult == vertices.size())
 				{
-					vertexSet.push_back(vertexData);
+					vertices.push_back(vertexData);
 				}
 				index[i] = findResult;
 			}
@@ -219,24 +218,24 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 			{
 				// Create new mesh
 				indexBuffer = new int[indices.size() * 3];
-				vertexBuffer = new Vertex[vertexSet.size()];
+				vertexBuffer = new Vertex[vertices.size()];
 				// Generate indexBuffer
-				for (int i = 0; i != indices.size(); ++i)
+				for (unsigned i = 0; i != indices.size(); ++i)
 				{
-					for (int j = 0; j < 3; ++j)
+					for (unsigned j = 0; j < 3; ++j)
 					{
 						indexBuffer[i * 3 + j] = indices[i][j];
 					}
 				}
 				// Generate vertexBuffer
 				int i = 0;
-				for (auto it = vertexSet.begin(); it != vertexSet.end(); ++it)
+				for (auto& it : vertices)
 				{
-					Vertex vtx{ positions[(*it)[0] - 1], normals[(*it)[1] - 1], texcoords[(*it)[2] - 1] };
+					Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
 					vertexBuffer[i] = vtx;
 					++i;
 				}
-				std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertexSet.size()), indexBuffer, int(indices.size()) * 3, device);
+				std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size()) * 3, device);
 				meshList.push_back(newMesh);
 				mtlOfMeshes.push_back(currentMtl);
 
@@ -244,7 +243,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				delete[] vertexBuffer;
 
 				indices.clear();
-				vertexSet.clear();
+				vertices.clear();
 			}
 
 			currentMtl = s[1];
@@ -253,24 +252,24 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 
 	// Create new mesh
 	indexBuffer = new int[indices.size() * 3];
-	vertexBuffer = new Vertex[vertexSet.size()];
+	vertexBuffer = new Vertex[vertices.size()];
 	// Generate indexBuffer
-	for (int i = 0; i != indices.size(); ++i)
+	for (unsigned i = 0; i != indices.size(); ++i)
 	{
-		for (int j = 0; j < 3; ++j)
+		for (unsigned j = 0; j < 3; ++j)
 		{
 			indexBuffer[i * 3 + j] = indices[i][j];
 		}
 	}
 	// Generate vertexBuffer
 	int i = 0;
-	for (auto it = vertexSet.begin(); it != vertexSet.end(); ++it)
+	for (auto& it : vertices)
 	{
-		Vertex vtx{ positions[(*it)[0] - 1], normals[(*it)[1] - 1], texcoords[(*it)[2] - 1] };
+		Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
 		vertexBuffer[i] = vtx;
 		++i;
 	}
-	std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertexSet.size()), indexBuffer, int(indices.size() * 3), device);
+	std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size() * 3), device);
 	meshList.push_back(newMesh);
 	mtlOfMeshes.push_back(currentMtl);
 
@@ -278,21 +277,19 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	delete[] vertexBuffer;
 
 	indices.clear();
-	vertexSet.clear();
+	vertices.clear();
 
 	// Read .mtl file
 	if (!mtlFile.empty())
 	{
-		std::ifstream fin(mtlFile);
-		printf("[INFO] MTL file \"");
-		printf(mtlFile.c_str());
-		printf("\" opened.\n");
-		std::string line;
+		std::ifstream mltFin(mtlFile);
+		printf("[INFO] MTL file \"%s\" opened.\n", mtlFile.c_str());
+		std::string mtlLine;
 		std::shared_ptr<Material> current_mtl = nullptr;
 		std::string currentName;
-		while (getline(fin, line))
+		while (getline(mltFin, mtlLine))
 		{
-			auto s = split(line, ' ');
+			auto s = split(mtlLine, ' ');
 			std::string first_token(s[0]);
 			if (first_token == "newmtl")
 			{
@@ -313,7 +310,6 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[2], g);
 				str2num(s[3], b);
 				current_mtl->diffuse = DirectX::XMFLOAT3(1, 1, 1);
-				//current_mtl->diffuse = Eigen::Vector3f(r, g, b);
 			}
 			else if (first_token == "Ka")
 			{
@@ -330,7 +326,6 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[2], g);
 				str2num(s[3], b);
 				current_mtl->specular = DirectX::XMFLOAT3(1, 1, 1);
-				//current_mtl->specular = Eigen::Vector3f(r, g, b);
 			}
 			else if (first_token == "Ke")
 			{
@@ -350,9 +345,9 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				// texture file
 				std::string name = folder + s[1];
 
-				printf("[INFO] Load texture file \"");
-				printf(name.c_str());
-				printf("\".\n");
+				printf("[INFO] Load texture file \"%s\".\n", name.c_str());
+
+				printf("[WARNING] \"Load texture\" is a placeholder logic.\n");
 			}
 		}
 
@@ -362,16 +357,14 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	}
 	else
 	{
-		printf("[INFO] No mtl data in file ");
-		printf(filename.c_str());
-		printf(" found. Fallback to default material.\n");
+		printf("[INFO] No mtl data in file \"%s\" found. Fallback to default material.\n", filename.c_str());
 		materialList.push_back(Material::GetDefault());
 	}
 
 	// Set Material of Mesh
-	for (int i = 0; i != meshList.size(); ++i)
+	for (unsigned m = 0; m != meshList.size(); ++m)
 	{
-		meshList[i]->SetMaterial(materialMap[mtlOfMeshes[i]]);
+		meshList[m]->SetMaterial(materialMap[mtlOfMeshes[m]]);
 	}
 
 

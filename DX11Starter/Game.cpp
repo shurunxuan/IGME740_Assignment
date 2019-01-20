@@ -31,7 +31,6 @@ Game::Game(HINSTANCE hInstance)
 	CreateConsoleWindow(500, 120, 32, 120);
 	printf("Console window created successfully.  Feel free to printf() here.\n");
 #endif
-
 }
 
 // --------------------------------------------------------
@@ -51,6 +50,8 @@ Game::~Game()
 	delete vertexShader;
 	delete pixelShader;
 
+	delete unlitShader;
+
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -61,6 +62,9 @@ Game::~Game()
 
 	// Delete Camera
 	delete camera;
+
+	// Delete Light
+	delete[] lights;
 }
 
 // --------------------------------------------------------
@@ -96,8 +100,24 @@ void Game::LoadShaders()
 	pixelShader = new SimplePixelShader(device, context);
 	pixelShader->LoadShaderFile(L"PixelShader.cso");
 
+	unlitShader = new SimplePixelShader(device, context);
+	unlitShader->LoadShaderFile(L"UnlitShader.cso");
+
 	Material::GetDefault()->SetVertexShaderPtr(vertexShader);
 	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
+
+	// Initialize Light
+	lightCount = 2;
+	lights = new DirectionalLight[lightCount];
+
+	lights[0].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].DiffuseColor = XMFLOAT4(0.9372549019607843f, 0.8549019607843137f, 0.4666666666666667f, 1.0f);
+	lights[0].Direction = XMFLOAT3(1.0f, -1.0f, 0.0f);
+
+	lights[1].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[1].DiffuseColor = XMFLOAT4(0.9843137254901961f, 0.6823529411764706f, 0.0627450980392157f, 1.0f);
+	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
+
 }
 
 
@@ -118,6 +138,7 @@ void Game::CreateMatrices()
 void Game::CreateBasicGeometry()
 {
 	std::string filename;
+
 	// Open a file
 	OPENFILENAME ofn;       // common dialog box structure
 	char szFile[260];       // buffer for file name
@@ -133,23 +154,22 @@ void Game::CreateBasicGeometry()
 	ofn.nMaxFile = sizeof(szFile);
 	ofn.lpstrFilter = "OBJ Model file\0*.obj\0";
 	ofn.nFilterIndex = 1;
-	ofn.lpstrFileTitle = "Choose a .obj file";
+	ofn.lpstrFileTitle = nullptr;
 	ofn.nMaxFileTitle = 0;
-	ofn.lpstrInitialDir = NULL;
+	ofn.lpstrInitialDir = nullptr;
+	ofn.lpstrTitle = "Choose a model";
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
 	// Display the Open dialog box. 
 
-	if (GetOpenFileName(&ofn) == TRUE)
+	if (GetOpenFileName(&ofn))
 	{
 		filename = szFile;
 	}
 	else
 	{
 		filename = "D:\\models\\cone.obj";
-		printf("[WARNING] No file chosen. Fallback to default file \"");
-		printf(filename.c_str());
-		printf("\".\n");
+		printf("[WARNING] No file chosen. Fallback to default file \"%s\".\n", filename.c_str());
 	}
 
 	const auto modelData = Mesh::LoadFromFile(filename, device);
@@ -161,18 +181,46 @@ void Game::CreateBasicGeometry()
 		mat->SetPixelShaderPtr(pixelShader);
 	}
 
-	// Create GameEntity data
-	entityCount = 1;
+	const int mapSize = 15;
+
+	entityCount = 2;
 	entities = new GameEntity*[entityCount];
 
-	// Create GameEntity
-	// Initial Transform
-	for (int i = 0; i < entityCount; ++i)
+
+	// Create GameEntity & Initial Transform
+	entities[0] = new GameEntity(modelData.first);
+	entities[0]->SetTranslation(XMFLOAT3(0.0f, 0.25f, 5.0f));
+	entities[0]->SetScale(XMFLOAT3(0.5f, 0.5f, 0.5f));
+
+	// Create some black/white tiles
+	const std::shared_ptr<Material> unlit = std::make_shared<Material>(vertexShader, unlitShader);
+
+	std::vector<std::shared_ptr<Mesh>> meshes;
+	meshes.reserve(mapSize * mapSize);
+
+	const float mapH = (mapSize - 1) / 2.0f;
+	for (int i = 0; i < mapSize; ++i)
 	{
-		entities[i] = new GameEntity(modelData.first);
-		entities[i]->SetTranslation(XMFLOAT3(0.0f, 0.0f, 5.0f));
-		entities[i]->SetScale(XMFLOAT3(0.5f, 0.5f, 0.5f));
+		for (int j = 0; j < mapSize; ++j)
+		{
+			const auto c = float((i + j) % 2);
+			// Using unlit shader so normal and uv doesn't matter
+			Vertex vtx[4] = {
+				{XMFLOAT3(-0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(-0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(+0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+				{XMFLOAT3(+0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
+			};
+			int idx[6] = { 0, 1, 2, 0, 2, 3 };
+
+			std::shared_ptr<Mesh> m = std::make_shared<Mesh>(vtx, 4, idx, 6, device);
+			m->SetMaterial(unlit);
+			meshes.push_back(m);
+		}
 	}
+
+	entities[1] = new GameEntity(meshes);
+	entities[1]->SetTranslation(XMFLOAT3(0.0f, 0.0f, 5.0f));
 }
 
 
@@ -196,21 +244,24 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
-	// Rotate the Cube Meshes
+	// Rotate the Mesh
 	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
 	XMFLOAT3 axis_0 = { 0.0f, 1.0f, 0.0f };
 	const XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
 	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
 	XMFLOAT4 r_0{};
 	XMStoreFloat4(&r_0, rQua_0);
-	for (int i = 0; i < entityCount; ++i)
-		entities[i]->SetRotation(r_0);
+	entities[0]->SetRotation(r_0);
 
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
 	const XMFLOAT3 up(0.0f, 1.0f, 0.0f);
-	const float speed = 2.0f * deltaTime;
+	float speed = 2.0f * deltaTime;
+	if (GetAsyncKeyState(VK_LSHIFT))
+	{
+		speed *= 4.0f;
+	}
 	if (GetAsyncKeyState('W') & 0x8000)
 	{
 		camera->Update(forward.x * speed, forward.y * speed, forward.z * speed, 0.0f, 0.0f);
@@ -279,10 +330,21 @@ void Game::Draw(float deltaTime, float totalTime)
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"light0",					// The name of the (eventual) variable in the shader
+				lights,							// The address of the data to copy
+				sizeof(DirectionalLight));		// The size of the data to copy
+
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"light1",					// The name of the (eventual) variable in the shader
+				lights + 1,							// The address of the data to copy
+				sizeof(DirectionalLight));		// The size of the data to copy
+
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
 			//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->CopyAllBufferData();
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->CopyAllBufferData();
 
 			// Set the vertex and pixel shaders to use for the next Draw() command
 			//  - These don't technically need to be set every frame...YET
@@ -384,6 +446,22 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
+	const float scale = 1.0f + wheelDelta / 3.0f;
 
+	XMFLOAT3 objTranslation = entities[0]->GetTranslation();
+	const float zTemp = objTranslation.z;
+	XMFLOAT3 objScale = entities[0]->GetScale();
+
+	XMVECTOR vec = XMLoadFloat3(&objTranslation);
+	vec = XMVectorScale(vec, scale);
+	XMStoreFloat3(&objTranslation, vec);
+	objTranslation.z = zTemp;
+
+	vec = XMLoadFloat3(&objScale);
+	vec = XMVectorScale(vec, scale);
+	XMStoreFloat3(&objScale, vec);
+
+	entities[0]->SetTranslation(objTranslation);
+	entities[0]->SetScale(objScale);
 }
 #pragma endregion

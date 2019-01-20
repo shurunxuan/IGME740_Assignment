@@ -2,10 +2,9 @@
 
 #include "DXCore.h"
 #include "SimpleShader.h"
-#include <DirectXMath.h>
-#include "Mesh.h"
 #include "GameEntity.h"
 #include "FirstPersonCamera.h"
+#include "Light.h"
 
 class Game 
 	: public DXCore
@@ -42,6 +41,8 @@ private:
 	SimpleVertexShader* vertexShader;
 	SimplePixelShader* pixelShader;
 
+	SimplePixelShader* unlitShader;
+
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
@@ -52,5 +53,9 @@ private:
 
 	// Camera
 	FirstPersonCamera* camera;
+
+	// Lighting
+	int lightCount;
+	DirectionalLight* lights;
 };
 
