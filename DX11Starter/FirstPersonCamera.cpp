@@ -4,14 +4,18 @@
 
 FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
 {
-	xRotation = 0.0f;
-	yRotation = 0.0f;
+	xRotation = -7.0f;
+	yRotation = 0.18f;
 
-	position = DirectX::XMFLOAT3(0, 1, -3);
-	direction = DirectX::XMFLOAT3(0, 0, 1);
+	position = DirectX::XMFLOAT3(30.0f, 15.0f, -25.0f);
+
+	DirectX::XMFLOAT3 z(0.0f, 0.0f, 1.0f);
+	const DirectX::XMVECTOR rotationQua = DirectX::XMQuaternionRotationRollPitchYaw(yRotation, xRotation, 0.0f);
+	const DirectX::XMVECTOR newDirection = DirectX::XMVector3Rotate(XMLoadFloat3(&z), rotationQua);
+	XMStoreFloat3(&direction, newDirection);
 	UpdateViewMatrix();
 
-	UpdateProjectionMatrix(screenWidth, screenHeight, 3.14159265f / 3.0f);
+	UpdateProjectionMatrix(screenWidth, screenHeight, 3.14159265f / 4.0f);
 
 	printf("[INFO] FirstPersonCamera created at <0x%p> by FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight).\n", this);
 }
@@ -73,7 +77,7 @@ void FirstPersonCamera::UpdateProjectionMatrix(float width, float height, float 
 		fov,		// Field of View Angle
 		float(width) / height,		// Aspect ratio
 		0.1f,						// Near clip plane distance
-		100.0f);					// Far clip plane distance
+		1000.0f);					// Far clip plane distance
 	projectionMatrix = XMMatrixTranspose(P); // Transpose for HLSL!
 }
 

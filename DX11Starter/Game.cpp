@@ -45,6 +45,8 @@ Game::~Game()
 	if (vertexBuffer) { vertexBuffer->Release(); }
 	if (indexBuffer) { indexBuffer->Release(); }
 
+	if (blendState) { blendState->Release(); }
+
 	// Delete our simple shader objects, which
 	// will clean up their own internal DirectX stuff
 	delete vertexShader;
@@ -110,13 +112,27 @@ void Game::LoadShaders()
 	lightCount = 2;
 	lights = new DirectionalLight[lightCount];
 
-	lights[0].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	lights[0].DiffuseColor = XMFLOAT4(0.9372549019607843f, 0.8549019607843137f, 0.4666666666666667f, 1.0f);
-	lights[0].Direction = XMFLOAT3(1.0f, -1.0f, 0.0f);
+	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
+	lights[0].DiffuseColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
 
-	lights[1].AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	lights[1].DiffuseColor = XMFLOAT4(0.9843137254901961f, 0.6823529411764706f, 0.0627450980392157f, 1.0f);
+	lights[1].AmbientColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
+	lights[1].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
+
+	// Alpha Blending
+	D3D11_BLEND_DESC BlendState;
+	ZeroMemory(&BlendState, sizeof(D3D11_BLEND_DESC));
+	BlendState.RenderTarget[0].BlendEnable = TRUE;
+	BlendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	BlendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	BlendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	BlendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	BlendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	BlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	BlendState.RenderTarget[0].RenderTargetWriteMask = 0x0f;
+	device->CreateBlendState(&BlendState, &blendState);
+	context->OMSetBlendState(blendState, nullptr, 0xFFFFFF);
 
 }
 
@@ -137,95 +153,41 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	std::string filename;
-
-	// Open a file
-	OPENFILENAME ofn;
-	char fileBuf[260];
-	char pathBuf[260];
-	int bytes = GetModuleFileName(NULL, pathBuf, 260);
-	for (--bytes; bytes != 0; --bytes)
-	{
-		if (pathBuf[bytes] == '\\')
-			break;
-	}
-	pathBuf[bytes] = '\0';
-	ZeroMemory(&ofn, sizeof(ofn));
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = hWnd;
-	ofn.lpstrFile = fileBuf;
-	ofn.lpstrFile[0] = '\0';
-	ofn.nMaxFile = sizeof(fileBuf);
-	ofn.lpstrFilter = "OBJ Model file\0*.obj\0";
-	ofn.nFilterIndex = 1;
-	ofn.lpstrFileTitle = nullptr;
-	ofn.nMaxFileTitle = 0;
-	ofn.lpstrInitialDir = pathBuf;
-	ofn.lpstrTitle = "Choose a model";
-	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-	// Display the Open dialog box. 
-
-	if (GetOpenFileName(&ofn))
-	{
-		filename = fileBuf;
-	}
-	else
-	{
-		// Direct junction for folder "models" is already created in post-build events.
-		filename = "models\\helix.obj";
-		printf("[WARNING] No file chosen. Fallback to default file \"%s\".\n", filename.c_str());
-	}
-
-	const auto modelData = Mesh::LoadFromFile(filename, device);
+	const auto modelData1 = Mesh::LoadFromFile("models\\GroudonChamber\\GroudonChamber.obj", device, context);
 
 	// The shaders are not set yet so we need to set it now.
-	for (const std::shared_ptr<Material>& mat : modelData.second)
+	for (const std::shared_ptr<Material>& mat : modelData1.second)
 	{
 		mat->SetVertexShaderPtr(vertexShader);
 		mat->SetPixelShaderPtr(pixelShader);
 	}
 
-	const int mapSize = 15;
+	const auto modelData2 = Mesh::LoadFromFile("models\\Groudon\\0.obj", device, context);
+
+	// The shaders are not set yet so we need to set it now.
+	for (const std::shared_ptr<Material>& mat : modelData2.second)
+	{
+		mat->SetVertexShaderPtr(vertexShader);
+		mat->SetPixelShaderPtr(pixelShader);
+	}
 
 	entityCount = 2;
 	entities = new GameEntity*[entityCount];
 
 
 	// Create GameEntity & Initial Transform
-	entities[0] = new GameEntity(modelData.first);
-	entities[0]->SetTranslation(XMFLOAT3(0.0f, 0.25f, 5.0f));
-	entities[0]->SetScale(XMFLOAT3(0.5f, 0.5f, 0.5f));
+	entities[0] = new GameEntity(modelData1.first);
+	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
 
-	// Create some black/white tiles
-	const std::shared_ptr<Material> unlit = std::make_shared<Material>(vertexShader, unlitShader);
-
-	std::vector<std::shared_ptr<Mesh>> meshes;
-	meshes.reserve(mapSize * mapSize);
-
-	const float mapH = (mapSize - 1) / 2.0f;
-	for (int i = 0; i < mapSize; ++i)
-	{
-		for (int j = 0; j < mapSize; ++j)
-		{
-			const auto c = float((i + j) % 2);
-			// Using unlit shader so normal and uv doesn't matter
-			Vertex vtx[4] = {
-				{XMFLOAT3(-0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
-				{XMFLOAT3(-0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
-				{XMFLOAT3(+0.5f + i - mapH, 0, +0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
-				{XMFLOAT3(+0.5f + i - mapH, 0, -0.5f + j - mapH), XMFLOAT3(), XMFLOAT2(), XMFLOAT4(c, c, c, c)},
-			};
-			int idx[6] = { 0, 1, 2, 0, 2, 3 };
-
-			std::shared_ptr<Mesh> m = std::make_shared<Mesh>(vtx, 4, idx, 6, device);
-			m->SetMaterial(unlit);
-			meshes.push_back(m);
-		}
-	}
-
-	entities[1] = new GameEntity(meshes);
-	entities[1]->SetTranslation(XMFLOAT3(0.0f, 0.0f, 5.0f));
+	entities[1] = new GameEntity(modelData2.first);
+	XMFLOAT3 y = { 0.0f, 1.0f, 0.0f };
+	XMVECTOR yAxis = XMLoadFloat3(&y);
+	XMVECTOR rot = XMQuaternionRotationAxis(yAxis, -3.1415927f / 2.0f);
+	XMFLOAT4 r = { };
+	XMStoreFloat4(&r, rot);
+	entities[1]->SetRotation(r);
+	entities[1]->SetTranslation(XMFLOAT3(+8.75f, 7.09f, 0.0f));
+	entities[1]->SetScale(XMFLOAT3(0.025f, 0.025f, 0.025f));
 }
 
 
@@ -249,20 +211,11 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
-	// Rotate the Mesh
-	XMVECTOR rQua_0 = XMLoadFloat4(&entities[0]->GetRotation());
-	XMFLOAT3 axis_0 = { 0.0f, 1.0f, 0.0f };
-	const XMVECTOR newR_0 = XMQuaternionRotationAxis(XMLoadFloat3(&axis_0), deltaTime * 2.0f);
-	rQua_0 = XMQuaternionMultiply(rQua_0, newR_0);
-	XMFLOAT4 r_0{};
-	XMStoreFloat4(&r_0, rQua_0);
-	entities[0]->SetRotation(r_0);
-
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
 	const XMFLOAT3 up(0.0f, 1.0f, 0.0f);
-	float speed = 2.0f * deltaTime;
+	float speed = 8.0f * deltaTime;
 	if (GetAsyncKeyState(VK_LSHIFT))
 	{
 		speed *= 4.0f;
@@ -337,13 +290,11 @@ void Game::Draw(float deltaTime, float totalTime)
 
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
 				"light0",					// The name of the (eventual) variable in the shader
-				lights,							// The address of the data to copy
+				lights + i,							// The address of the data to copy
 				sizeof(DirectionalLight));		// The size of the data to copy
 
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
-				"light1",					// The name of the (eventual) variable in the shader
-				lights + 1,							// The address of the data to copy
-				sizeof(DirectionalLight));		// The size of the data to copy
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->srvPtr);
 
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
@@ -451,22 +402,28 @@ void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 void Game::OnMouseWheel(float wheelDelta, int x, int y)
 {
 	// Add any custom code here...
-	const float scale = 1.0f + wheelDelta / 3.0f;
+	float scale = 1.0f + wheelDelta / 3.0f;
+	if (scale < 0) scale = 1.0f;
 
-	XMFLOAT3 objTranslation = entities[0]->GetTranslation();
-	const float zTemp = objTranslation.z;
-	XMFLOAT3 objScale = entities[0]->GetScale();
+	for (int i = 0; i < 2; ++i)
+	{
+		XMFLOAT3 objTranslation = entities[i]->GetTranslation();
+		const float zTemp = objTranslation.z;
+		XMFLOAT3 objScale = entities[i]->GetScale();
 
-	XMVECTOR vec = XMLoadFloat3(&objTranslation);
-	vec = XMVectorScale(vec, scale);
-	XMStoreFloat3(&objTranslation, vec);
-	objTranslation.z = zTemp;
+		XMVECTOR vec = XMLoadFloat3(&objTranslation);
+		vec = XMVectorScale(vec, scale);
+		XMStoreFloat3(&objTranslation, vec);
+		objTranslation.z = zTemp;
 
-	vec = XMLoadFloat3(&objScale);
-	vec = XMVectorScale(vec, scale);
-	XMStoreFloat3(&objScale, vec);
+		vec = XMLoadFloat3(&objScale);
+		vec = XMVectorScale(vec, scale);
+		XMStoreFloat3(&objScale, vec);
 
-	entities[0]->SetTranslation(objTranslation);
-	entities[0]->SetScale(objScale);
+		entities[i]->SetTranslation(objTranslation);
+		entities[i]->SetScale(objScale);
+
+		printf("%f", objScale.x);
+	}
 }
 #pragma endregion
