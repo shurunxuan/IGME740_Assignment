@@ -51,7 +51,7 @@ Game::~Game()
 	delete pixelShader;
 
 	delete unlitShader;
-
+  
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
 	{
