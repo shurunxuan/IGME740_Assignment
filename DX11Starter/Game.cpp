@@ -109,10 +109,12 @@ void Game::LoadShaders()
 
 	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
 	lights[0].DiffuseColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
 
 	lights[1].AmbientColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
 	lights[1].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	lights[1].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
 
 	// Alpha Blending
@@ -288,6 +290,16 @@ void Game::Draw(float deltaTime, float totalTime)
 				lights + i,							// The address of the data to copy
 				sizeof(DirectionalLight));		// The size of the data to copy
 
+			// Lighting Data
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("ambient", entities[i]->GetMeshAt(j)->GetMaterial()->ambient);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("diffuse", entities[i]->GetMeshAt(j)->GetMaterial()->diffuse);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("specular", entities[i]->GetMeshAt(j)->GetMaterial()->specular);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
+
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
+
+			// Sampler and Texture
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->srvPtr);
 

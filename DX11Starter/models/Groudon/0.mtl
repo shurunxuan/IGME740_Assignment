@@ -2,7 +2,7 @@ newmtl BodyASpc00
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyA1_0.png
@@ -11,7 +11,7 @@ newmtl BodyASpc01
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyA1_0.png
@@ -20,7 +20,7 @@ newmtl BodyB00
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyB1_0.png
@@ -29,7 +29,7 @@ newmtl BodyB01
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyB1_0.png
@@ -38,7 +38,7 @@ newmtl BodyBVco00
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyB1_0.png
@@ -47,7 +47,7 @@ newmtl BodyBVco01
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyB1_0.png
@@ -56,7 +56,7 @@ newmtl BodyBVco02
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyB1_0.png
@@ -65,7 +65,7 @@ newmtl BodyCSpcVco00
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyC1_0.png
@@ -74,7 +74,7 @@ newmtl BodyCSpcVco01
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd BodyC1_0.png
@@ -83,7 +83,7 @@ newmtl Eye
 illum 2
 Kd 0.8 0.8 0.8
 Ka 0.8 0.8 0.8
-Ks 0.0 0.0 0.0
+Ks 0.8 0.8 0.8
 Ke 0.0 0.0 0.0
 Ns 0.0
 map_Kd Eye1_0.png

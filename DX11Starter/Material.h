@@ -24,10 +24,10 @@ public:
 	static std::shared_ptr<Material> GetDefault();
 
 	// Some parameters for lighting
-	DirectX::XMFLOAT3 ambient = { 1.0f, 1.0f, 1.0f };
-	DirectX::XMFLOAT3 diffuse = { 0.0f, 0.0f, 0.0f };
-	DirectX::XMFLOAT3 specular = { 0.0f, 0.0f, 0.0f };
-	DirectX::XMFLOAT3 emission = { 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT4 ambient = { 1.0f, 1.0f, 1.0f, 1.0f };
+	DirectX::XMFLOAT4 diffuse = { 0.0f, 0.0f, 0.0f, 1.0f };
+	DirectX::XMFLOAT4 specular = { 0.0f, 0.0f, 0.0f, 1.0f };
+	DirectX::XMFLOAT4 emission = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float shininess = 0.0f;
 	// texture
 	ID3D11ShaderResourceView* srvPtr;

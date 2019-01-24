@@ -333,7 +333,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->diffuse = DirectX::XMFLOAT3(1, 1, 1);
+				current_mtl->diffuse = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ka")
 			{
@@ -341,7 +341,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->ambient = DirectX::XMFLOAT3(r, g, b);
+				current_mtl->ambient = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ks")
 			{
@@ -349,7 +349,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->specular = DirectX::XMFLOAT3(1, 1, 1);
+				current_mtl->specular = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ke")
 			{
@@ -357,7 +357,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->emission = DirectX::XMFLOAT3(r, g, b);
+				current_mtl->emission = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ns")
 			{
