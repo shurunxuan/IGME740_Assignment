@@ -104,18 +104,13 @@ void Game::LoadShaders()
 	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
 
 	// Initialize Light
-	lightCount = 2;
+	lightCount = 1;
 	lights = new DirectionalLight[lightCount];
 
 	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-	lights[0].DiffuseColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[0].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
-
-	lights[1].AmbientColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	lights[1].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[1].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -208,6 +203,13 @@ bool animationDirection = true;
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
+	XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+	XMVECTOR yVec = XMLoadFloat3(&yAxis);
+	XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+	XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
+	lightDirection = XMVector3Rotate(lightDirection, rotateQ);
+	XMStoreFloat3(&lights[0].Direction, lightDirection);
+
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
@@ -287,7 +289,7 @@ void Game::Draw(float deltaTime, float totalTime)
 
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
 				"light0",					// The name of the (eventual) variable in the shader
-				lights + i,							// The address of the data to copy
+				lights,							// The address of the data to copy
 				sizeof(DirectionalLight));		// The size of the data to copy
 
 			// Lighting Data
