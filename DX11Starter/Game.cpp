@@ -196,19 +196,22 @@ void Game::OnResize()
 }
 
 // Several small variables to record the direction of the animation
-bool animationDirection = true;
+bool animateLight = false;
 
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
-	XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
-	XMVECTOR yVec = XMLoadFloat3(&yAxis);
-	XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
-	XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
-	lightDirection = XMVector3Rotate(lightDirection, rotateQ);
-	XMStoreFloat3(&lights[0].Direction, lightDirection);
+	if (animateLight)
+	{
+		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+		XMVECTOR yVec = XMLoadFloat3(&yAxis);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
+		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
+		XMStoreFloat3(&lights[0].Direction, lightDirection);
+	}
 
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
@@ -242,6 +245,12 @@ void Game::Update(float deltaTime, float totalTime)
 	if (GetAsyncKeyState('X') & 0x8000)
 	{
 		camera->Update(-up.x * speed, -up.y * speed, -up.z * speed, 0.0f, 0.0f);
+	}
+
+	// Animation
+	if (GetAsyncKeyState('L') & 0x8000)
+	{
+		animateLight = !animateLight;
 	}
 
 	// Quit if the escape key is pressed

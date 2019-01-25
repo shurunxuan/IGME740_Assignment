@@ -71,7 +71,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	float4 diffuseColor = (ndl * light0.DiffuseColor * surfaceColor);
 	diffuseColor.w = 0;
-	result += diffuseColor;
+	result += diffuseColor * diffuse;
 
 	// Blinn-Phong
 	float ndh = dot(n, h);
@@ -80,7 +80,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 	float4 specularColor;
 	specularColor.xyz = specularColor3;
 	specularColor.w = 0;
-	result += specularColor;
+	result += specularColor * specular;
 
 	result = saturate(result);
 	return result;
