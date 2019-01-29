@@ -215,7 +215,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				DirectX::XMVECTOR posV1 = DirectX::XMLoadFloat3(&pos1);
 				DirectX::XMVECTOR posV2 = DirectX::XMLoadFloat3(&pos2);
 
-				DirectX::XMVECTOR v1 = DirectX::XMVectorSubtract(posV0, posV1);
+				DirectX::XMVECTOR v1 = DirectX::XMVectorSubtract(posV1, posV0);
 				DirectX::XMVECTOR v2 = DirectX::XMVectorSubtract(posV1, posV2);
 
 				DirectX::XMVECTOR nV = DirectX::XMVector3Cross(v1, v2);

@@ -76,7 +76,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 	// Blinn-Phong
 	float ndh = dot(n, h);
 	float specularLightIntensity = max(ndh, 0);
-	float3 specularColor3 = saturate(pow(ndh, shininess) * light0.SpecularColor);
+	float3 specularColor3 = saturate(pow(ndh, max(shininess, 5.0)) * light0.SpecularColor.xyz);
 	float4 specularColor;
 	specularColor.xyz = specularColor3;
 	specularColor.w = 0;
