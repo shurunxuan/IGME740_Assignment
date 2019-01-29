@@ -224,7 +224,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				DirectX::XMStoreFloat3(&n, nV);
 
 				normals.push_back(n);
-				vtxN[0] = vtxN[1] = vtxN[2] = normals.size();
+				vtxN[0] = vtxN[1] = vtxN[2] = int(normals.size());
 				if (s.size() == 5) vtxN[3] = vtxN[0];
 			}
 
