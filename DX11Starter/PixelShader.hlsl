@@ -16,12 +16,28 @@ struct DirectionalLight
 {
 	float4 AmbientColor;
 	float4 DiffuseColor;
+	float4 SpecularColor;
 	float3 Direction;
 };
 
 cbuffer externalData : register(b0)
 {
 	DirectionalLight light0;
+};
+
+cbuffer materialData : register(b1)
+{
+	// Material Data
+	float4 ambient;
+	float4 diffuse;
+	float4 specular;
+	float4 emission;
+	float shininess;
+};
+
+cbuffer cameraData : register(b2)
+{
+	float3 CameraDirection;
 };
 
 Texture2D diffuseTexture  : register(t0);
@@ -38,20 +54,35 @@ SamplerState basicSampler : register(s0);
 // --------------------------------------------------------
 float4 main(VertexToPixel input) : SV_TARGET
 {
-	input.normal = normalize(input.normal);
+	float3 v = normalize(-CameraDirection);
+	float3 n = normalize(input.normal);
+	float3 l = normalize(light0.Direction);
+	float3 h = normalize(l + v);
+	
 	float4 result = float4(0, 0, 0, 0);
 
 	// Adjust the variables below as necessary to work with your own code
 	float4 surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
 
-	float3 normalizedLightDirection = normalize(light0.Direction);
-	float diffuseLightIntensity = dot(input.normal, light0.Direction);
-	diffuseLightIntensity = saturate(diffuseLightIntensity);
+	result += light0.AmbientColor * surfaceColor;
 
-	float4 diffuse = saturate(diffuseLightIntensity * light0.DiffuseColor * surfaceColor);
-	result += diffuse + light0.AmbientColor * surfaceColor;
+	float ndl = dot(n, l);
+	ndl = saturate(ndl);
+
+	float4 diffuseColor = (ndl * light0.DiffuseColor * surfaceColor);
+	diffuseColor.w = 0;
+	result += diffuseColor * diffuse;
+
+	// Blinn-Phong
+	float ndh = dot(n, h);
+	float specularLightIntensity = max(ndh, 0);
+	float3 specularColor3 = saturate(pow(specularLightIntensity, max(shininess, 10.0)) * light0.SpecularColor.xyz);
+	float4 specularColor;
+	specularColor.xyz = specularColor3;
+	specularColor.w = 0;
+	result += specularColor * specular;
 
 	result = saturate(result);
-
-	return float4(result);
+	return result;
+	//return diffuse;
 }

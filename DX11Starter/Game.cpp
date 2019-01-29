@@ -104,16 +104,13 @@ void Game::LoadShaders()
 	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
 
 	// Initialize Light
-	lightCount = 2;
+	lightCount = 1;
 	lights = new DirectionalLight[lightCount];
 
 	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-	lights[0].DiffuseColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+	lights[0].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	lights[0].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
-
-	lights[1].AmbientColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
-	lights[1].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[1].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -199,13 +196,23 @@ void Game::OnResize()
 }
 
 // Several small variables to record the direction of the animation
-bool animationDirection = true;
+bool animateLight = false;
 
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime)
 {
+	if (animateLight)
+	{
+		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+		XMVECTOR yVec = XMLoadFloat3(&yAxis);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
+		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
+		XMStoreFloat3(&lights[0].Direction, lightDirection);
+	}
+
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
@@ -238,6 +245,12 @@ void Game::Update(float deltaTime, float totalTime)
 	if (GetAsyncKeyState('X') & 0x8000)
 	{
 		camera->Update(-up.x * speed, -up.y * speed, -up.z * speed, 0.0f, 0.0f);
+	}
+
+	// Animation
+	if (GetAsyncKeyState('L') & 0x8000)
+	{
+		animateLight = !animateLight;
 	}
 
 	// Quit if the escape key is pressed
@@ -285,9 +298,19 @@ void Game::Draw(float deltaTime, float totalTime)
 
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
 				"light0",					// The name of the (eventual) variable in the shader
-				lights + i,							// The address of the data to copy
+				lights,							// The address of the data to copy
 				sizeof(DirectionalLight));		// The size of the data to copy
 
+			// Lighting Data
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("ambient", entities[i]->GetMeshAt(j)->GetMaterial()->ambient);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("diffuse", entities[i]->GetMeshAt(j)->GetMaterial()->diffuse);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("specular", entities[i]->GetMeshAt(j)->GetMaterial()->specular);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
+
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
+
+			// Sampler and Texture
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->srvPtr);
 

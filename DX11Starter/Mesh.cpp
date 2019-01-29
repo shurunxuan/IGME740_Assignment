@@ -188,17 +188,49 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 		else if (first_token == "f")
 		{
 			int index[4];
+			int vtxV[4];
+			int vtxT[4];
+			int vtxN[4];
+			bool hasNormal = true;
 			for (unsigned i = 0; i != s.size() - 1; ++i)
 			{
 				std::string p(s[i + 1]);
 				auto p_detail = split(p, '/');
 				int v = -1, n = -1, t = -1;
-				str2num(p_detail[0], v);
-				str2num(p_detail[1], t);
+				str2num(p_detail[0], vtxV[i]);
+				str2num(p_detail[1], vtxT[i]);
 				if (p_detail.size() > 2)
-					str2num(p_detail[2], n);
+					str2num(p_detail[2], vtxN[i]);
+				else
+					hasNormal = false;
+			}
+			// No normal data, generate it
+			if (!hasNormal)
+			{
+				DirectX::XMFLOAT3 pos0 = positions[vtxV[0] - 1];
+				DirectX::XMFLOAT3 pos1 = positions[vtxV[1] - 1];
+				DirectX::XMFLOAT3 pos2 = positions[vtxV[2] - 1];
 
-				std::vector<int> vertexData = { v, n, t };
+				DirectX::XMVECTOR posV0 = DirectX::XMLoadFloat3(&pos0);
+				DirectX::XMVECTOR posV1 = DirectX::XMLoadFloat3(&pos1);
+				DirectX::XMVECTOR posV2 = DirectX::XMLoadFloat3(&pos2);
+
+				DirectX::XMVECTOR v1 = DirectX::XMVectorSubtract(posV1, posV0);
+				DirectX::XMVECTOR v2 = DirectX::XMVectorSubtract(posV1, posV2);
+
+				DirectX::XMVECTOR nV = DirectX::XMVector3Cross(v1, v2);
+
+				DirectX::XMFLOAT3 n{};
+				DirectX::XMStoreFloat3(&n, nV);
+
+				normals.push_back(n);
+				vtxN[0] = vtxN[1] = vtxN[2] = int(normals.size());
+				if (s.size() == 5) vtxN[3] = vtxN[0];
+			}
+
+			for (unsigned i = 0; i != s.size() - 1; ++i)
+			{
+				std::vector<int> vertexData = { vtxV[i], vtxN[i], vtxT[i] };
 
 				unsigned findResult = unsigned(std::find(vertices.begin(), vertices.end(), vertexData) - vertices.begin());
 				if (findResult == vertices.size())
@@ -333,7 +365,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->diffuse = DirectX::XMFLOAT3(1, 1, 1);
+				current_mtl->diffuse = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ka")
 			{
@@ -341,7 +373,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->ambient = DirectX::XMFLOAT3(r, g, b);
+				current_mtl->ambient = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ks")
 			{
@@ -349,7 +381,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->specular = DirectX::XMFLOAT3(1, 1, 1);
+				current_mtl->specular = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ke")
 			{
@@ -357,12 +389,12 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->emission = DirectX::XMFLOAT3(r, g, b);
+				current_mtl->emission = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ns")
 			{
-				current_mtl->shininess = 20;
-				//str2num(s[1], current_mtl->shininess);
+				//current_mtl->shininess = 20;
+				str2num(s[1], current_mtl->shininess);
 			}
 			else if (first_token == "map_Kd")
 			{

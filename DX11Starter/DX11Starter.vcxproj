@@ -69,7 +69,16 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+    <CustomBuildBeforeTargets>Clean</CustomBuildBeforeTargets>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
+    <CustomBuildBeforeTargets>Clean</CustomBuildBeforeTargets>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -87,8 +96,16 @@
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
     </Manifest>
     <PostBuildEvent>
-      <Command>if not exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (echo Making a directory junction to "$(ProjectDir)models" at "$(SolutionDir)$(Platform)\$(Configuration)\" &amp; mklink /J "$(SolutionDir)$(Platform)\$(Configuration)\models" "$(ProjectDir)models")</Command>
+      <Command>if not exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (mklink /J "$(SolutionDir)$(Platform)\$(Configuration)\models" "$(ProjectDir)models")</Command>
+      <Message>Making a directory junction to "$(ProjectDir)models" at "$(SolutionDir)$(Platform)\$(Configuration)\"</Message>
     </PostBuildEvent>
+    <CustomBuildStep>
+      <Command>if exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (rmdir /s /q "$(SolutionDir)$(Platform)\$(Configuration)\models")</Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>Cleaning Directory Junctions</Message>
+      <Outputs>DeleteJunction;</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -119,8 +136,16 @@
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
     </Manifest>
     <PostBuildEvent>
-      <Command>if not exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (echo Making a directory junction to "$(ProjectDir)models" at "$(SolutionDir)$(Platform)\$(Configuration)\" &amp; mklink /J "$(SolutionDir)$(Platform)\$(Configuration)\models" "$(ProjectDir)models")</Command>
+      <Command>if not exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (mklink /J "$(SolutionDir)$(Platform)\$(Configuration)\models" "$(ProjectDir)models")</Command>
+      <Message>Making a directory junction to "$(ProjectDir)models" at "$(SolutionDir)$(Platform)\$(Configuration)\"</Message>
     </PostBuildEvent>
+    <CustomBuildStep>
+      <Command>if exist "$(SolutionDir)$(Platform)\$(Configuration)\models" (rmdir /s /q "$(SolutionDir)$(Platform)\$(Configuration)\models")</Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Message>Cleaning Directory Junctions</Message>
+      <Outputs>DeleteJunction;</Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FirstPersonCamera.cpp" />
