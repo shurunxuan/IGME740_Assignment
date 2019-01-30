@@ -1,4 +1,5 @@
 #include "GameEntity.h"
+#include "SimpleLogger.h"
 
 GameEntity::GameEntity()
 {
@@ -6,8 +7,7 @@ GameEntity::GameEntity()
 	meshes = nullptr;
 	InitializeTransform();
 
-	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity().\n", this);
-
+	LOG_INFO << "GameEntity created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 GameEntity::GameEntity(const std::shared_ptr<Mesh>& m)
@@ -17,7 +17,7 @@ GameEntity::GameEntity(const std::shared_ptr<Mesh>& m)
 	meshes[0] = m;
 	InitializeTransform();
 
-	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity(const std::shared_ptr<Mesh> m).\n", this);
+	LOG_INFO << "GameEntity created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 GameEntity::GameEntity(std::vector<std::shared_ptr<Mesh>> m)
@@ -30,13 +30,13 @@ GameEntity::GameEntity(std::vector<std::shared_ptr<Mesh>> m)
 	}
 	InitializeTransform();
 
-	printf("[INFO] GameEntity created at <0x%p> by GameEntity::GameEntity(std::vector<std::shared_ptr<Mesh>> m).\n", this);
+	LOG_INFO << "GameEntity created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 GameEntity::~GameEntity()
 {
 	delete[] meshes;
-	printf("[INFO] GameEntity destroyed at <0x%p>.\n", this);
+	LOG_INFO << "GameEntity destroyed at <0x" << this << ">." << std::endl;
 }
 
 void GameEntity::UpdateWorldMatrix()
@@ -51,7 +51,6 @@ void GameEntity::UpdateWorldMatrix()
 	XMStoreFloat4x4(&itWorldMatrix, XMMatrixInverse(nullptr, w));
 
 	shouldUpdate = false;
-	//printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
 }
 
 void GameEntity::SetTranslation(const DirectX::XMFLOAT3 t)

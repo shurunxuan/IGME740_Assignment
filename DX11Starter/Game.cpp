@@ -1,7 +1,10 @@
-#include "Game.h"
-#include "Vertex.h"
 #include <map>
 #include <array>
+#include "Game.h"
+#include "Vertex.h"
+#include "SimpleLogger.h"
+#include <iostream>
+#include <fstream>
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -65,6 +68,9 @@ Game::~Game()
 
 	// Delete Light
 	delete[] lights;
+
+	// Close logging file
+	fout.close();
 }
 
 // --------------------------------------------------------
@@ -73,6 +79,13 @@ Game::~Game()
 // --------------------------------------------------------
 void Game::Init()
 {
+	// Initialize Loggers
+	ADD_LOGGER(debug, std::cout);
+
+	fout.open("log.txt");
+	if (fout.is_open())
+		ADD_LOGGER_FMT(info, fout, "<$t> [$v] $m\n\tFile: $f:$l\n\tFunc: $s");
+
 	// Helper methods for loading shaders, creating some basic
 	// geometry to draw and some simple camera matrices.
 	//  - You'll be expanding and/or replacing these later

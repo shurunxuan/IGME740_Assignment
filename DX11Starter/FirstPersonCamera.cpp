@@ -1,5 +1,6 @@
 #include <cstdio>
 #include "FirstPersonCamera.h"
+#include "SimpleLogger.h"
 
 
 FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
@@ -17,13 +18,13 @@ FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
 
 	UpdateProjectionMatrix(screenWidth, screenHeight, 3.14159265f / 4.0f);
 
-	printf("[INFO] FirstPersonCamera created at <0x%p> by FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight).\n", this);
+	LOG_INFO << "FirstPersonCamera created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 
 FirstPersonCamera::~FirstPersonCamera()
 {
-	printf("[INFO] FirstPersonCamera destroyed at <0x%p>.\n", this);
+	LOG_INFO << "FirstPersonCamera destroyed at <0x" << this << ">." << std::endl;
 }
 
 void FirstPersonCamera::Update(float deltaXt, float deltaYt, float deltaZt, float deltaXr, float deltaYr)
