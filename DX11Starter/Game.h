@@ -5,6 +5,7 @@
 #include "GameEntity.h"
 #include "FirstPersonCamera.h"
 #include "Light.h"
+#include <fstream>
 
 class Game 
 	: public DXCore
@@ -47,6 +48,9 @@ private:
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
+
+	// Logging file
+	std::ofstream fout;
 
 	// Store the GameEntity data
 	int entityCount;

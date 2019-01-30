@@ -1,25 +1,25 @@
 #include <cassert>
 #include "SimpleLogger.h"
 
-static SimpleLogger DefaultLogger = SimpleLogger();
+SimpleLogger SimpleLogger::DefaultLogger = SimpleLogger();
 
 std::ostream& operator<<(std::ostream& out, const LogLevel value)
 {
 	switch (value)
 	{
-	case INFO:
+	case info:
 		out << "INFO";
 		break;
-	case DEBUG:
+	case debug:
 		out << "DEBUG";
 		break;
-	case WARNING:
+	case warning:
 		out << "WARNING";
 		break;
-	case ERROR:
+	case error:
 		out << "ERROR";
 		break;
-	case FATAL:
+	case fatal:
 		out << "FATAL";
 		break;
 	}
@@ -34,10 +34,18 @@ LogStream::LogStream(const LogLevel logLevel, std::ostream& os, const std::strin
 	initialized = false;
 }
 
-const LogStream& LogStream::Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level)
+const LogStream& LogStream::Initialize(const char* time, const char* file, const int line, const char* funcsig, LogLevel level)
 {
-	assert(initialized);
-	initialized = true;
+	assert(!initialized);
+	initialized = level >= this->level;
+	if (!initialized) return *this;
+
+	currentTime = time;
+	currentFile = file;
+	currentLine = line;
+	currentFuncSig = funcsig;
+	currentLevel = level;
+
 	bool escaping = false;
 	for (fmtPtr = 0; fmtPtr < format.size(); ++fmtPtr)
 	{
@@ -84,58 +92,75 @@ const LogStream& LogStream::Initialize(const char* time, const char* file, const
 	return *this;
 }
 
-void SimpleLogger::Add(LogStream& logStream)
+const LogStream& LogStream::Finalize(manipulator pf)
+{
+	if (!initialized) return *this;
+	bool escaping = false;
+	for (size_t i = fmtPtr + 1; i < format.size(); ++i)
+	{
+
+		if (escaping)
+		{
+			escaping = false;
+			switch (format[i])
+			{
+			case '$':
+				ostream << '$';
+				break;
+			case 't':
+				ostream << currentTime;
+				break;
+			case 'f':
+				ostream << currentFile;
+				break;
+			case 'l':
+				ostream << currentLine;
+				break;
+			case 's':
+				ostream << currentFuncSig;
+				break;
+			case 'v':
+				ostream << currentLevel;
+				break;
+			default:
+				assert(true);
+				break;
+			}
+		}
+		else if (format[i] == '$')
+		{
+			escaping = true;
+		}
+		else
+		{
+			ostream << format[i];
+		}
+	}
+	ostream << pf;
+	initialized = false;
+	return *this;
+}
+
+void SimpleLogger::Add(const LogStream& logStream)
 {
 	logStreams.push_back(logStream);
 }
 
-const SimpleLogger& SimpleLogger::Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level)
+SimpleLogger& SimpleLogger::Initialize(const char* time, const char* file, const int line, const char* funcsig, LogLevel level)
 {
-	for each (LogStream ls in logStreams)
+	for (auto& ls : logStreams)
 	{
-		if (level >= ls.level)
-		{
-			ls.Initialize(time, file, line, funcsig, level);
-		}
+		ls.Initialize(time, file, line, funcsig, level);
 	}
 	return *this;
 }
 
-template<typename T>
-const SimpleLogger& SimpleLogger::operator<<(const T& buf) const
+SimpleLogger& SimpleLogger::operator<<(manipulator pf)
 {
-	for each (LogStream ls in logStreams)
+	for (auto& logStream : logStreams)
 	{
-		ls << buf;
+		logStream.Finalize(pf);
 	}
+
 	return *this;
 }
-
-
-const SimpleLogger& SimpleLogger::operator<<(LogStream::manipulator pf) const
-{
-	for each (LogStream ls in logStreams)
-	{
-		ls << pf;
-	}
-	return *this;
-}
-
-template <typename T>
-const LogStream& LogStream::operator<<(const T& buf) const
-{
-	if (initialized)
-		ostream << buf;
-	return *this;
-}
-
-const LogStream& LogStream::operator<<(manipulator pf)
-{
-	if (initialized)
-	{
-		ostream << pf;
-		initialized = false;
-	}
-	return *this;
-}
-

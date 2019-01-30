@@ -1,30 +1,30 @@
 #pragma once
 #include <ostream>
+#include <string>
 #include <vector>
 
 enum LogLevel
 {
-	INFO = 0,
-	DEBUG = 1,
-	WARNING = 2,
-	ERROR = 3,
-	FATAL = 4
+	info = 0,
+	debug = 1,
+	warning = 2,
+	error = 3,
+	fatal = 4
 };
 
 class LogStream
 {
 	friend class SimpleLogger;
 public:
-	LogStream(LogLevel logLevel, std::ostream& os, const std::string& fmt = "[$l] $m");
+	LogStream(LogLevel logLevel, std::ostream& os, const std::string& fmt = "[$v] $m");
 	~LogStream() = default;
 
+	typedef std::ostream& (*manipulator)(std::ostream&);
 	template<typename T>
 	const LogStream& operator<<(const T& buf) const;
 
-	typedef std::ostream& (*manipulator)(std::ostream&);
-	const LogStream& operator<<(manipulator pf);
-
-	const LogStream& Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level);
+	const LogStream& Initialize(const char* time, const char* file, const int line, const char* funcsig, LogLevel level);
+	const LogStream& Finalize(manipulator pf);
 private:
 	LogLevel level;
 	std::ostream& ostream;
@@ -32,6 +32,12 @@ private:
 	std::string format;
 
 	bool initialized;
+
+	std::string currentTime;
+	std::string currentFile;
+	int currentLine;
+	std::string currentFuncSig;
+	LogLevel currentLevel;
 
 	size_t fmtPtr;
 };
@@ -42,21 +48,43 @@ public:
 	SimpleLogger() = default;
 	~SimpleLogger() = default;
 
-	void Add(LogStream& logStream);
-	const SimpleLogger& Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level);
+	void Add(const LogStream& logStream);
+	SimpleLogger& Initialize(const char* time, const char* file, int line, const char* funcsig, LogLevel level);
 
-	template<typename T>
-	const SimpleLogger& operator<<(const T& buf) const;
+	typedef std::ostream& (*manipulator)(std::ostream&);
+	template<class T>
+	SimpleLogger& operator<<(const T& buf);
 
-	const SimpleLogger& operator<<(LogStream::manipulator pf) const;
+	SimpleLogger& operator<<(manipulator pf);
+
+	static SimpleLogger DefaultLogger;
 private:
 	std::vector<LogStream> logStreams;
 };
 
-#define ADD_LOGGER(logger) (DefaultLogger.Add(logger));
-#define LOG(level) (DefaultLogger.Initialize(__TIME__, __FILE__, __LINE__, __FUNCSIG__, level))
-#define LOG_INFO (LOG(INFO)) 
-#define LOG_DEBUG (LOG(DEBUG)) 
-#define LOG_WARNING (LOG(WARNING)) 
-#define LOG_ERROR (LOG(ERROR)) 
-#define LOG_FATAL (LOG(FATAL)) 
+template <typename T>
+const LogStream& LogStream::operator<<(const T& buf) const
+{
+	if (initialized)
+		ostream << buf;
+	return *this;
+}
+
+template<typename T>
+SimpleLogger& SimpleLogger::operator<<(const T& buf)
+{
+	for (size_t i = 0; i < logStreams.size(); ++i)
+	{
+		logStreams[i] << buf;
+	}
+	return *this;
+}
+
+#define ADD_LOGGER(level, os) (SimpleLogger::DefaultLogger.Add(LogStream(level, os)))
+#define ADD_LOGGER_FMT(level, os, fmt) (SimpleLogger::DefaultLogger.Add(LogStream(level, os, fmt)))
+#define LOG(level) (SimpleLogger::DefaultLogger.Initialize(__TIME__, __FILE__, __LINE__, __FUNCSIG__, level))
+#define LOG_INFO (LOG(info)) 
+#define LOG_DEBUG (LOG(debug)) 
+#define LOG_WARNING (LOG(warning)) 
+#define LOG_ERROR (LOG(error)) 
+#define LOG_FATAL (LOG(fatal)) 

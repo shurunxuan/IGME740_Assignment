@@ -1,4 +1,5 @@
 #include "Material.h"
+#include "SimpleLogger.h"
 
 std::shared_ptr<Material> Material::defaultMaterial = std::make_unique<Material>();
 
@@ -12,8 +13,7 @@ Material::Material(ID3D11Device* d = nullptr)
 	samplerState = nullptr;
 
 	device = d;
-
-	printf("[INFO] Material created at <0x%p> by Material::Material(ID3D11Device* d).\n", this);
+	LOG_INFO << "Material created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 
@@ -27,8 +27,7 @@ Material::Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader, 
 	samplerState = nullptr;
 
 	device = d;
-
-	printf("[INFO] Material created at <0x%p> by Material::Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader, ID3D11Device* d).\n", this);
+	LOG_INFO << "Material created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 Material::~Material()
@@ -37,7 +36,7 @@ Material::~Material()
 	if (diffuseSrvPtr) { diffuseSrvPtr->Release(); }
 	if (normalSrvPtr) { normalSrvPtr->Release(); }
 
-	printf("[INFO] Material destroyed at <0x%p>.\n", this);
+	LOG_INFO << "Material destroyed at <0x" << this << ">." << std::endl;
 }
 
 SimpleVertexShader* Material::GetVertexShaderPtr() const
@@ -79,7 +78,7 @@ void Material::InitializeSampler()
 
 	HRESULT hr = device->CreateSamplerState(&samplerDesc, &samplerState);
 	if (FAILED(hr))
-		printf("[WARNING] CreateSamplerState failed at <0x%p>.\n", this);
+		LOG_ERROR << "CreateSamplerState failed at <0x" << this << ">." << std::endl;
 }
 
 std::shared_ptr<Material> Material::GetDefault()

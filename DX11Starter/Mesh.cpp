@@ -8,6 +8,7 @@
 #include <DirectXMath.h>
 #include <WICTextureLoader.h>
 #include "Mesh.h"
+#include "SimpleLogger.h"
 
 
 Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, ID3D11Device* device)
@@ -37,7 +38,7 @@ Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, 
 		device->CreateBuffer(&vbd, &initialVertexData, &vertexBuffer);
 	else
 	{
-		printf("[ERROR] Error when creating vertex buffer: ID3D11Device is null.\n");
+		LOG_ERROR << "Error when creating vertex buffer: ID3D11Device is null." << std::endl;
 		system("pause");
 		exit(-1);
 	}
@@ -62,7 +63,7 @@ Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, 
 	// - Once we do this, we'll NEVER CHANGE THE BUFFER AGAIN
 	device->CreateBuffer(&ibd, &initialIndexData, &indexBuffer);
 
-	printf("[INFO] Mesh created at <0x%p>.\n", this);
+	LOG_INFO << "Mesh created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 
 
@@ -71,7 +72,7 @@ Mesh::~Mesh()
 	if (vertexBuffer) { vertexBuffer->Release(); }
 	if (indexBuffer) { indexBuffer->Release(); }
 
-	printf("[INFO] Mesh destroyed at <0x%p>.\n", this);
+	LOG_INFO << "Mesh destroyed at <0x" << this << ">." << std::endl;
 }
 
 std::vector<std::string> split(std::string str, char ch)
@@ -104,7 +105,7 @@ Material* Mesh::GetMaterial() const
 {
 	if (material == nullptr)
 	{
-		printf("[WARNING] Material of Mesh <0x%p> is not set! Fallback to default material.\n", this);
+		LOG_WARNING << "Material of Mesh <0x" << this << "> is not set! Fallback to default material." << std::endl;
 		return Material::GetDefault().get();
 	}
 
@@ -142,7 +143,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 
 	// Read .obj file
 	std::ifstream fin(filename);
-	printf("[INFO] OBJ file \"%s\" opened.\n", filename.c_str());
+	LOG_INFO << "OBJ file \"" << filename << "\" opened." << std::endl;
 	std::string line;
 	std::string mtlFile;
 	std::string folder;
@@ -397,7 +398,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	if (!mtlFile.empty())
 	{
 		std::ifstream mltFin(mtlFile);
-		printf("[INFO] MTL file \"%s\" opened.\n", mtlFile.c_str());
+		LOG_INFO << "MTL file \"" << mtlFile << "\" opened." << std::endl;
 		std::string mtlLine;
 		std::shared_ptr<Material> current_mtl = nullptr;
 		std::string currentName;
@@ -465,11 +466,11 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->diffuseSrvPtr);
 				if (FAILED(hr))
 				{
-					printf("[WARNING] Failed to load diffuse texture file \"%s\".\n", name.c_str());
+					LOG_WARNING << "Failed to load diffuse texture file \"" << name << "\"." << std::endl;
 				}
 				else
 				{
-					printf("[INFO] Load diffuse texture file \"%s\".\n", name.c_str());
+					LOG_INFO << "Load diffuse texture file \"" << name << "\"." << std::endl;
 					current_mtl->InitializeSampler();
 				}
 			}
@@ -484,11 +485,11 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->normalSrvPtr);
 				if (FAILED(hr))
 				{
-					printf("[WARNING] Failed to load normal texture file \"%s\".\n", name.c_str());
+					LOG_WARNING << "Failed to load normal texture file \"" << name << "\"." << std::endl;
 				}
 				else
 				{
-					printf("[INFO] Load normal texture file \"%s\".\n", name.c_str());
+					LOG_INFO << "Load normal texture file \"" << name << "\"." << std::endl;
 					current_mtl->InitializeSampler();
 				}
 			}
@@ -500,7 +501,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	}
 	else
 	{
-		printf("[INFO] No mtl data in file \"%s\" found. Fallback to default material.\n", filename.c_str());
+		LOG_INFO << "No mtl data in file \"" << filename << "\" found. Fallback to default material." << std::endl;
 		materialList.push_back(Material::GetDefault());
 	}
 
