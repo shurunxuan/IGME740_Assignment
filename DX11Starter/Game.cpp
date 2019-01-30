@@ -51,7 +51,7 @@ Game::~Game()
 	// will clean up their own internal DirectX stuff
 	delete vertexShader;
 	delete pixelShader;
-  
+
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -145,7 +145,7 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	const auto modelData1 = Mesh::LoadFromFile("models\\GroudonChamber\\GroudonChamber.obj", device, context);
+	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 
 	// The shaders are not set yet so we need to set it now.
 	for (const std::shared_ptr<Material>& mat : modelData1.second)
@@ -154,32 +154,13 @@ void Game::CreateBasicGeometry()
 		mat->SetPixelShaderPtr(pixelShader);
 	}
 
-	const auto modelData2 = Mesh::LoadFromFile("models\\Groudon\\0.obj", device, context);
-
-	// The shaders are not set yet so we need to set it now.
-	for (const std::shared_ptr<Material>& mat : modelData2.second)
-	{
-		mat->SetVertexShaderPtr(vertexShader);
-		mat->SetPixelShaderPtr(pixelShader);
-	}
-
-	entityCount = 2;
-	entities = new GameEntity*[entityCount];
+	entityCount = 1;
+	entities = new GameEntity * [entityCount];
 
 
 	// Create GameEntity & Initial Transform
 	entities[0] = new GameEntity(modelData1.first);
-	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
-
-	entities[1] = new GameEntity(modelData2.first);
-	XMFLOAT3 y = { 0.0f, 1.0f, 0.0f };
-	XMVECTOR yAxis = XMLoadFloat3(&y);
-	XMVECTOR rot = XMQuaternionRotationAxis(yAxis, -3.1415927f / 2.0f);
-	XMFLOAT4 r = { };
-	XMStoreFloat4(&r, rot);
-	entities[1]->SetRotation(r);
-	entities[1]->SetTranslation(XMFLOAT3(+8.75f, 7.09f, 0.0f));
-	entities[1]->SetScale(XMFLOAT3(0.025f, 0.025f, 0.025f));
+	entities[0]->SetScale(XMFLOAT3(3.0f, 3.0f, 3.0f));
 }
 
 
@@ -196,8 +177,9 @@ void Game::OnResize()
 }
 
 // Several small variables to record the direction of the animation
-bool animateLight = false;
-
+bool animateLight = true;
+bool animateModel = false;
+bool turnOnNormalMap = true;
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -213,14 +195,26 @@ void Game::Update(float deltaTime, float totalTime)
 		XMStoreFloat3(&lights[0].Direction, lightDirection);
 	}
 
+	if (animateModel)
+	{
+		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+		XMVECTOR yVec = XMLoadFloat3(&yAxis);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR modelRotation = XMLoadFloat4(&entities[0]->GetRotation());
+		modelRotation = XMQuaternionMultiply(modelRotation, rotateQ);
+		XMFLOAT4 rot{};
+		XMStoreFloat4(&rot, modelRotation);
+		entities[0]->SetRotation(rot);
+	}
+
 	// W, A, S, D for moving camera
 	const XMFLOAT3 forward = camera->GetForward();
 	const XMFLOAT3 right = camera->GetRight();
 	const XMFLOAT3 up(0.0f, 1.0f, 0.0f);
-	float speed = 8.0f * deltaTime;
+	float speed = 2.0f * deltaTime;
 	if (GetAsyncKeyState(VK_LSHIFT))
 	{
-		speed *= 4.0f;
+		speed *= 2.0f;
 	}
 	if (GetAsyncKeyState('W') & 0x8000)
 	{
@@ -248,9 +242,17 @@ void Game::Update(float deltaTime, float totalTime)
 	}
 
 	// Animation
-	if (GetAsyncKeyState('L') & 0x8000)
+	if (GetAsyncKeyState('L') & 0x1)
 	{
 		animateLight = !animateLight;
+	}
+	if (GetAsyncKeyState('M') & 0x1)
+	{
+		animateModel = !animateModel;
+	}
+	if (GetAsyncKeyState('N') & 0x1)
+	{
+		turnOnNormalMap = !turnOnNormalMap;
 	}
 
 	// Quit if the escape key is pressed
@@ -293,6 +295,7 @@ void Game::Draw(float deltaTime, float totalTime)
 			XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
 			XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("itworld", entities[i]->GetWorldMatrixIT());
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 
@@ -308,11 +311,18 @@ void Game::Draw(float deltaTime, float totalTime)
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
 
+			const bool hasNormalMap = entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr != nullptr;
+			const bool hasDiffuseTexture = entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr != nullptr;
+
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasNormalMap", turnOnNormalMap && hasNormalMap ? 1.0f : 0.0f);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
+
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
 
 			// Sampler and Texture
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->srvPtr);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("normalTexture", entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr);
 
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
@@ -328,8 +338,8 @@ void Game::Draw(float deltaTime, float totalTime)
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShader();
 
 
-			ID3D11Buffer* vertexBuffer = entities[i]->GetMeshAt(j)->GetVertexBuffer();
-			ID3D11Buffer* indexBuffer = entities[i]->GetMeshAt(j)->GetIndexBuffer();
+			ID3D11Buffer * vertexBuffer = entities[i]->GetMeshAt(j)->GetVertexBuffer();
+			ID3D11Buffer * indexBuffer = entities[i]->GetMeshAt(j)->GetIndexBuffer();
 			// Set buffers in the input assembler
 			//  - Do this ONCE PER OBJECT you're drawing, since each object might
 			//    have different geometry.
@@ -400,7 +410,7 @@ void Game::OnMouseUp(WPARAM buttonState, int x, int y)
 void Game::OnMouseMove(WPARAM buttonState, int x, int y)
 {
 	// Add any custom code here...
-	if (buttonState & MK_LBUTTON)
+	if (buttonState& MK_LBUTTON)
 	{
 		const LONG deltaX = x - prevMousePos.x;
 		const LONG deltaY = y - prevMousePos.y;
@@ -423,7 +433,7 @@ void Game::OnMouseWheel(float wheelDelta, int x, int y)
 	float scale = 1.0f + wheelDelta / 3.0f;
 	if (scale < 0) scale = 1.0f;
 
-	for (int i = 0; i < 2; ++i)
+	for (int i = 0; i < entityCount; ++i)
 	{
 		XMFLOAT3 objTranslation = entities[i]->GetTranslation();
 		const float zTemp = objTranslation.z;
@@ -440,8 +450,6 @@ void Game::OnMouseWheel(float wheelDelta, int x, int y)
 
 		entities[i]->SetTranslation(objTranslation);
 		entities[i]->SetScale(objScale);
-
-		printf("%f", objScale.x);
 	}
 }
 #pragma endregion

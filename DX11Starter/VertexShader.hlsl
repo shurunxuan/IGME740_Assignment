@@ -8,6 +8,7 @@
 cbuffer externalData : register(b0)
 {
 	matrix world;
+	matrix itworld;
 	matrix view;
 	matrix projection;
 };
@@ -27,7 +28,7 @@ struct VertexShaderInput
 	float3 position		: POSITION;     // XYZ position
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
-	float4 color		: COLOR;        // RGBA color
+	float3 tangent		: TANGENT;
 };
 
 // Struct representing the data we're sending down the pipeline
@@ -43,9 +44,9 @@ struct VertexToPixel
 	//  |    |                |
 	//  v    v                v
 	float4 position		: SV_POSITION;	// XYZW position (System Value Position)
-	float4 color		: COLOR;        // RGBA color
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
+	float3 tangent		: TANGENT;
 };
 
 // --------------------------------------------------------
@@ -77,12 +78,9 @@ VertexToPixel main( VertexShaderInput input )
 	output.position = mul(float4(input.position, 1.0f), worldViewProj);
 
 	// Update the normal
-	output.normal = mul(input.normal, (float3x3)world);
+	output.normal = mul(input.normal, (float3x3)itworld);
+	output.tangent = mul(input.tangent, (float3x3)itworld);
 
-	// Pass the color through 
-	// - The values will be interpolated per-pixel by the rasterizer
-	// - We don't need to alter it here, but we do need to send it to the pixel shader
-	output.color = input.color;
 	output.uv = input.uv;
 
 	// Whatever we return will make its way through the pipeline to the

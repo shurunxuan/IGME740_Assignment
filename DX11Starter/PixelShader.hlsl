@@ -7,9 +7,9 @@
 struct VertexToPixel
 {
 	float4 position		: SV_POSITION;
-	float4 color		: COLOR;
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
+	float3 tangent		: TANGENT;
 };
 
 struct DirectionalLight
@@ -33,6 +33,9 @@ cbuffer materialData : register(b1)
 	float4 specular;
 	float4 emission;
 	float shininess;
+
+	float hasDiffuseTexture;
+	float hasNormalMap;
 };
 
 cbuffer cameraData : register(b2)
@@ -41,6 +44,7 @@ cbuffer cameraData : register(b2)
 };
 
 Texture2D diffuseTexture  : register(t0);
+Texture2D normalTexture  : register(t1);
 SamplerState basicSampler : register(s0);
 
 // --------------------------------------------------------
@@ -58,16 +62,34 @@ float4 main(VertexToPixel input) : SV_TARGET
 	float3 n = normalize(input.normal);
 	float3 l = normalize(light0.Direction);
 	float3 h = normalize(l + v);
-	
+
+	float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
+	float3 b = normalize(cross(n, t));
+
 	float4 result = float4(0, 0, 0, 0);
 
+	// Normal Mapping
+	float4 normalMapping = normalTexture.Sample(basicSampler, input.uv);
+	normalMapping = normalMapping * 2 - 1;
+
+	float3x3 TBN = float3x3(t, b, n);
+
+	if (hasNormalMap)
+		n = mul(normalMapping.xyz, TBN);
+	n = normalize(n);
+
 	// Adjust the variables below as necessary to work with your own code
-	float4 surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
+	float4 surfaceColor;
+
+	if (hasDiffuseTexture)
+		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
+	else
+		surfaceColor = float4(1.0, 1.0, 1.0, 1.0);
 
 	result += light0.AmbientColor * surfaceColor;
 
 	float ndl = dot(n, l);
-	ndl = saturate(ndl);
+	ndl = max(ndl, 0);
 
 	float4 diffuseColor = (ndl * light0.DiffuseColor * surfaceColor);
 	diffuseColor.w = 0;
@@ -75,8 +97,8 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	// Blinn-Phong
 	float ndh = dot(n, h);
-	float specularLightIntensity = max(ndh, 0);
-	float3 specularColor3 = saturate(pow(specularLightIntensity, max(shininess, 10.0)) * light0.SpecularColor.xyz);
+	ndh = max(ndh, 0);
+	float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * light0.SpecularColor.xyz);
 	float4 specularColor;
 	specularColor.xyz = specularColor3;
 	specularColor.w = 0;
@@ -84,5 +106,6 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	result = saturate(result);
 	return result;
+	//return float4(t, 1.0);
 	//return diffuse;
 }

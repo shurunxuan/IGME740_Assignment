@@ -92,7 +92,7 @@ std::vector<std::string> split(std::string str, char ch)
 }
 
 template <typename T>
-T str2num(const std::string& str, T& num)
+T str2num(const std::string & str, T & num)
 {
 	std::stringstream ss;
 	ss << str;
@@ -116,7 +116,7 @@ void Mesh::SetMaterial(std::shared_ptr<Material> m)
 	material = std::move(m);
 }
 
-std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* context)
+std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string & filename, ID3D11Device * device, ID3D11DeviceContext * context)
 {
 	std::vector<std::shared_ptr<Mesh>> meshList;
 	std::vector<std::shared_ptr<Material>> materialList;
@@ -125,6 +125,8 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	std::vector<DirectX::XMFLOAT3> positions;
 	std::vector<DirectX::XMFLOAT3> normals;
 	std::vector<DirectX::XMFLOAT2> texcoords;
+
+	std::vector<DirectX::XMVECTOR> tangentsPerPositions;
 
 	std::vector<std::vector<int>> indices;
 	std::vector<std::vector<int>> vertices;
@@ -187,10 +189,13 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 		}
 		else if (first_token == "f")
 		{
-			int index[4];
-			int vtxV[4];
-			int vtxT[4];
-			int vtxN[4];
+			tangentsPerPositions.resize(positions.size(), DirectX::XMVectorZero());
+			int index[3];
+			int vtxV[3];
+			int vtxT[3];
+			int vtxN[3];
+			int vtxTan[3];
+			int vtxBit[3];
 			bool hasNormal = true;
 			for (unsigned i = 0; i != s.size() - 1; ++i)
 			{
@@ -207,13 +212,15 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 			// No normal data, generate it
 			if (!hasNormal)
 			{
+				if (normals.size() < positions.size())
+					normals.resize(positions.size(), DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f));
 				DirectX::XMFLOAT3 pos0 = positions[vtxV[0] - 1];
 				DirectX::XMFLOAT3 pos1 = positions[vtxV[1] - 1];
 				DirectX::XMFLOAT3 pos2 = positions[vtxV[2] - 1];
 
-				DirectX::XMVECTOR posV0 = DirectX::XMLoadFloat3(&pos0);
-				DirectX::XMVECTOR posV1 = DirectX::XMLoadFloat3(&pos1);
-				DirectX::XMVECTOR posV2 = DirectX::XMLoadFloat3(&pos2);
+				DirectX::XMVECTOR posV0 = XMLoadFloat3(&pos0);
+				DirectX::XMVECTOR posV1 = XMLoadFloat3(&pos1);
+				DirectX::XMVECTOR posV2 = XMLoadFloat3(&pos2);
 
 				DirectX::XMVECTOR v1 = DirectX::XMVectorSubtract(posV1, posV0);
 				DirectX::XMVECTOR v2 = DirectX::XMVectorSubtract(posV1, posV2);
@@ -221,31 +228,91 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				DirectX::XMVECTOR nV = DirectX::XMVector3Cross(v1, v2);
 
 				DirectX::XMFLOAT3 n{};
-				DirectX::XMStoreFloat3(&n, nV);
+				XMStoreFloat3(&n, nV);
 
-				normals.push_back(n);
-				vtxN[0] = vtxN[1] = vtxN[2] = int(normals.size());
-				if (s.size() == 5) vtxN[3] = vtxN[0];
+				DirectX::XMVECTOR n0 = XMLoadFloat3(&normals[vtxV[0] - 1]);
+				DirectX::XMVECTOR n1 = XMLoadFloat3(&normals[vtxV[1] - 1]);
+				DirectX::XMVECTOR n2 = XMLoadFloat3(&normals[vtxV[2] - 1]);
+
+				n0 = DirectX::XMVectorAdd(n0, nV);
+				n1 = DirectX::XMVectorAdd(n1, nV);
+				n2 = DirectX::XMVectorAdd(n2, nV);
+
+				XMStoreFloat3(&normals[vtxV[0] - 1], n0);
+				XMStoreFloat3(&normals[vtxV[1] - 1], n1);
+				XMStoreFloat3(&normals[vtxV[2] - 1], n2);
+
+				vtxN[0] = vtxV[0];
+				vtxN[1] = vtxV[1];
+				vtxN[2] = vtxV[2];
 			}
+
+			// Now to calculate tangent and bitangent
+			// We work relative to v0
+			DirectX::XMVECTOR P0 = XMLoadFloat3(&positions[vtxV[0] - 1]);
+			DirectX::XMVECTOR P1 = XMLoadFloat3(&positions[vtxV[1] - 1]);
+			DirectX::XMVECTOR P2 = XMLoadFloat3(&positions[vtxV[2] - 1]);
+
+			DirectX::XMVECTOR Q1V = DirectX::XMVectorSubtract(P1, P0);
+			DirectX::XMVECTOR Q2V = DirectX::XMVectorSubtract(P2, P0);
+
+			DirectX::XMFLOAT3 Q1{};
+			DirectX::XMFLOAT3 Q2{};
+			XMStoreFloat3(&Q1, Q1V);
+			XMStoreFloat3(&Q2, Q2V);
+
+			DirectX::XMFLOAT2 uv0 = texcoords[vtxT[0] - 1];
+			DirectX::XMFLOAT2 uv1 = texcoords[vtxT[1] - 1];
+			DirectX::XMFLOAT2 uv2 = texcoords[vtxT[2] - 1];
+
+			float s1 = uv1.x - uv0.x;
+			float t1 = uv1.y - uv0.y;
+			float s2 = uv2.x - uv0.x;
+			float t2 = uv2.y - uv0.x;
+
+			float inv = 1.0f / ((s1 * t2) - (s2 * t1));
+			float Tx = inv * (t2 * Q1.x - t1 * Q2.x);
+			float Ty = inv * (t2 * Q1.y - t1 * Q2.y);
+			float Tz = inv * (t2 * Q1.z - t1 * Q2.z);
+
+			DirectX::XMFLOAT3 T = { Tx, Ty, Tz };
+			DirectX::XMVECTOR TV = XMLoadFloat3(&T);
+			TV = DirectX::XMVector3Normalize(TV);
+
+			DirectX::XMVECTOR N0V = XMLoadFloat3(&normals[vtxN[0] - 1]);
+			DirectX::XMVECTOR N1V = XMLoadFloat3(&normals[vtxN[1] - 1]);
+			DirectX::XMVECTOR N2V = XMLoadFloat3(&normals[vtxN[2] - 1]);
+
+			DirectX::XMVECTOR B0V = DirectX::XMVector3Cross(N0V, TV);
+			DirectX::XMVECTOR B1V = DirectX::XMVector3Cross(N0V, TV);
+			DirectX::XMVECTOR B2V = DirectX::XMVector3Cross(N0V, TV);
+
+			DirectX::XMVECTOR T0V = DirectX::XMVector3Cross(B0V, N0V);
+			DirectX::XMVECTOR T1V = DirectX::XMVector3Cross(B1V, N1V);
+			DirectX::XMVECTOR T2V = DirectX::XMVector3Cross(B2V, N2V);
+
+			DirectX::XMFLOAT3 T0{};
+			DirectX::XMFLOAT3 T1{};
+			DirectX::XMFLOAT3 T2{};
+
+			XMStoreFloat3(&T0, T0V);
+			XMStoreFloat3(&T1, T1V);
+			XMStoreFloat3(&T2, T2V);
+
+			tangentsPerPositions[vtxV[0] - 1] = DirectX::XMVectorAdd(tangentsPerPositions[vtxV[0] - 1], T0V);
+			tangentsPerPositions[vtxV[1] - 1] = DirectX::XMVectorAdd(tangentsPerPositions[vtxV[1] - 1], T1V);
+			tangentsPerPositions[vtxV[2] - 1] = DirectX::XMVectorAdd(tangentsPerPositions[vtxV[2] - 1], T2V);
 
 			for (unsigned i = 0; i != s.size() - 1; ++i)
 			{
-				std::vector<int> vertexData = { vtxV[i], vtxN[i], vtxT[i] };
-
-				unsigned findResult = unsigned(std::find(vertices.begin(), vertices.end(), vertexData) - vertices.begin());
-				if (findResult == vertices.size())
-				{
-					vertices.push_back(vertexData);
-				}
-				index[i] = findResult;
+				std::vector<int> vertexData = { vtxV[i], vtxN[i], vtxT[i], vtxTan[i], vtxBit[i] };
+				index[i] = int(vertices.size());
+				vertices.push_back(vertexData);
 			}
+
 			indices.push_back({ index[0], index[2], index[1] });
 
-			if (s.size() == 5)
-			{
-				// 4th face
-				indices.push_back({ index[0], index[3], index[2] });
-			}
+			// I don't want to do 4th face so no.
 		}
 		else if (first_token == "usemtl")
 		{
@@ -266,19 +333,14 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				int i = 0;
 				for (auto& it : vertices)
 				{
-					// No normal data
-					DirectX::XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
-					if (it[1] < 0)
-					{
-						Vertex vtx{ positions[it[0] - 1], zero, texcoords[it[2] - 1] };
-						vertexBuffer[i] = vtx;
-					}
-					else
-					{
-						Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
-						vertexBuffer[i] = vtx;
-					}
-					
+					DirectX::XMFLOAT3 tangent{};
+					XMStoreFloat3(&tangent, DirectX::XMVector3Normalize(tangentsPerPositions[it[0] - 1]));
+					DirectX::XMVECTOR normal = XMLoadFloat3(&normals[it[1] - 1]);
+					normal = DirectX::XMVector3Normalize(normal);
+					XMStoreFloat3(&normals[it[1] - 1], normal);
+					Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1], tangent };
+					vertexBuffer[i] = vtx;
+
 					++i;
 				}
 				std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size()) * 3, device);
@@ -311,18 +373,14 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	int i = 0;
 	for (auto& it : vertices)
 	{
-		// No normal data
-		DirectX::XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
-		if (it[1] < 0)
-		{
-			Vertex vtx{ positions[it[0] - 1], zero, texcoords[it[2] - 1] };
-			vertexBuffer[i] = vtx;
-		}
-		else
-		{
-			Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1] };
-			vertexBuffer[i] = vtx;
-		}
+		DirectX::XMFLOAT3 tangent{};
+		XMStoreFloat3(&tangent, DirectX::XMVector3Normalize(tangentsPerPositions[it[0] - 1]));
+		DirectX::XMVECTOR normal = XMLoadFloat3(&normals[it[1] - 1]);
+		normal = DirectX::XMVector3Normalize(normal);
+		XMStoreFloat3(&normals[it[1] - 1], normal);
+		Vertex vtx{ positions[it[0] - 1], normals[it[1] - 1], texcoords[it[2] - 1], tangent };
+		vertexBuffer[i] = vtx;
+
 		++i;
 	}
 	std::shared_ptr<Mesh> newMesh = std::make_shared<Mesh>(vertexBuffer, int(vertices.size()), indexBuffer, int(indices.size() * 3), device);
@@ -404,14 +462,33 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
 				std::wstring wName = cv.from_bytes(name);
 
-				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->srvPtr);
+				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->diffuseSrvPtr);
 				if (FAILED(hr))
 				{
-					printf("[WARNING] Failed to load texture file \"%s\".\n", name.c_str());
+					printf("[WARNING] Failed to load diffuse texture file \"%s\".\n", name.c_str());
 				}
 				else
 				{
-					printf("[INFO] Load texture file \"%s\".\n", name.c_str());
+					printf("[INFO] Load diffuse texture file \"%s\".\n", name.c_str());
+					current_mtl->InitializeSampler();
+				}
+			}
+			else if (first_token == "map_Bump")
+			{
+				// texture file
+				std::string name = folder + s[1];
+				// string -> wstring
+				std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
+				std::wstring wName = cv.from_bytes(name);
+
+				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->normalSrvPtr);
+				if (FAILED(hr))
+				{
+					printf("[WARNING] Failed to load normal texture file \"%s\".\n", name.c_str());
+				}
+				else
+				{
+					printf("[INFO] Load normal texture file \"%s\".\n", name.c_str());
 					current_mtl->InitializeSampler();
 				}
 			}

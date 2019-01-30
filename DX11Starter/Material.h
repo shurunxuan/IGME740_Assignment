@@ -30,7 +30,8 @@ public:
 	DirectX::XMFLOAT4 emission = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float shininess = 0.0f;
 	// texture
-	ID3D11ShaderResourceView* srvPtr;
+	ID3D11ShaderResourceView* diffuseSrvPtr;
+	ID3D11ShaderResourceView* normalSrvPtr;
 
 private:
 	// Wrappers for DirectX shaders to provide simplified functionality
