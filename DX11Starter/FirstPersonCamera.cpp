@@ -4,10 +4,10 @@
 
 FirstPersonCamera::FirstPersonCamera(float screenWidth, float screenHeight)
 {
-	xRotation = -7.0f;
-	yRotation = 0.18f;
+	xRotation = 0.0f;
+	yRotation = 0.0f;
 
-	position = DirectX::XMFLOAT3(30.0f, 15.0f, -25.0f);
+	position = DirectX::XMFLOAT3(0.0f, 0.0f, -5.0f);
 
 	DirectX::XMFLOAT3 z(0.0f, 0.0f, 1.0f);
 	const DirectX::XMVECTOR rotationQua = DirectX::XMQuaternionRotationRollPitchYaw(yRotation, xRotation, 0.0f);

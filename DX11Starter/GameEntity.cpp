@@ -48,6 +48,7 @@ void GameEntity::UpdateWorldMatrix()
 	const DirectX::XMMATRIX w = s * r * t;
 
 	XMStoreFloat4x4(&worldMatrix, XMMatrixTranspose(w));
+	XMStoreFloat4x4(&itWorldMatrix, XMMatrixInverse(nullptr, w));
 
 	shouldUpdate = false;
 	//printf("[INFO] WorldMatrix of Game Entity <0x%p> Updated.\n", this);
@@ -94,6 +95,15 @@ DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrix()
 		UpdateWorldMatrix();
 	}
 	return worldMatrix;
+}
+
+DirectX::XMFLOAT4X4& GameEntity::GetWorldMatrixIT()
+{
+	if (shouldUpdate)
+	{
+		UpdateWorldMatrix();
+	}
+	return itWorldMatrix;
 }
 
 int GameEntity::GetMeshCount() const

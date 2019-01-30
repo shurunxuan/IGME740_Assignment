@@ -22,6 +22,7 @@ public:
 	DirectX::XMFLOAT4& GetRotation();
 
 	DirectX::XMFLOAT4X4& GetWorldMatrix();
+	DirectX::XMFLOAT4X4& GetWorldMatrixIT();
 
 	int GetMeshCount() const;
 	Mesh* GetMeshAt(int index) const;
@@ -36,6 +37,7 @@ private:
 	DirectX::XMFLOAT4 rotation{};
 
 	DirectX::XMFLOAT4X4 worldMatrix{};
+	DirectX::XMFLOAT4X4 itWorldMatrix{};
 
 	int meshCount;
 	std::shared_ptr<Mesh>* meshes;

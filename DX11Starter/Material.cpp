@@ -7,7 +7,8 @@ Material::Material(ID3D11Device* d = nullptr)
 	vertexShader = nullptr;
 	pixelShader = nullptr;
 
-	srvPtr = nullptr;
+	diffuseSrvPtr = nullptr;
+	normalSrvPtr = nullptr;
 	samplerState = nullptr;
 
 	device = d;
@@ -21,7 +22,8 @@ Material::Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader, 
 	vertexShader = vtxShader;
 	pixelShader = pxlShader;
 
-	srvPtr = nullptr;
+	diffuseSrvPtr = nullptr;
+	normalSrvPtr = nullptr;
 	samplerState = nullptr;
 
 	device = d;
@@ -32,7 +34,8 @@ Material::Material(SimpleVertexShader* vtxShader, SimplePixelShader* pxlShader, 
 Material::~Material()
 {
 	if (samplerState) { samplerState->Release(); }
-	if (srvPtr) { srvPtr->Release(); }
+	if (diffuseSrvPtr) { diffuseSrvPtr->Release(); }
+	if (normalSrvPtr) { normalSrvPtr->Release(); }
 
 	printf("[INFO] Material destroyed at <0x%p>.\n", this);
 }
@@ -64,6 +67,8 @@ ID3D11SamplerState* Material::GetSamplerState()
 
 void Material::InitializeSampler()
 {
+	if (samplerState) return;
+
 	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
 
 	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
