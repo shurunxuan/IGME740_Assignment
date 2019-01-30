@@ -28,8 +28,7 @@ struct VertexShaderInput
 	float3 position		: POSITION;     // XYZ position
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT0;
-	float3 bitangent	: TANGENT1;
+	float3 tangent		: TANGENT;
 };
 
 // Struct representing the data we're sending down the pipeline
@@ -47,8 +46,7 @@ struct VertexToPixel
 	float4 position		: SV_POSITION;	// XYZW position (System Value Position)
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT0;
-	float3 bitangent	: TANGENT1;
+	float3 tangent		: TANGENT;
 };
 
 // --------------------------------------------------------
@@ -82,7 +80,6 @@ VertexToPixel main( VertexShaderInput input )
 	// Update the normal
 	output.normal = mul(input.normal, (float3x3)itworld);
 	output.tangent = mul(input.tangent, (float3x3)itworld);
-	output.bitangent = mul(input.bitangent, (float3x3)itworld);
 
 	output.uv = input.uv;
 

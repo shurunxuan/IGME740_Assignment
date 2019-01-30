@@ -179,7 +179,7 @@ void Game::OnResize()
 // Several small variables to record the direction of the animation
 bool animateLight = true;
 bool animateModel = false;
-bool turnOnNormal = true;
+bool turnOnNormalMap = true;
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -252,7 +252,7 @@ void Game::Update(float deltaTime, float totalTime)
 	}
 	if (GetAsyncKeyState('N') & 0x1)
 	{
-		turnOnNormal = !turnOnNormal;
+		turnOnNormalMap = !turnOnNormalMap;
 	}
 
 	// Quit if the escape key is pressed
@@ -311,7 +311,11 @@ void Game::Draw(float deltaTime, float totalTime)
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
 
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("turnOnNormal", turnOnNormal ? 1.0f : 0.0f);
+			const bool hasNormalMap = entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr != nullptr;
+			const bool hasDiffuseTexture = entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr != nullptr;
+
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasNormalMap", turnOnNormalMap && hasNormalMap ? 1.0f : 0.0f);
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
 
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
 

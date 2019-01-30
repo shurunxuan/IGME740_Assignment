@@ -9,8 +9,7 @@ struct VertexToPixel
 	float4 position		: SV_POSITION;
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT0;
-	float3 bitangent	: TANGENT1;
+	float3 tangent		: TANGENT;
 };
 
 struct DirectionalLight
@@ -35,7 +34,8 @@ cbuffer materialData : register(b1)
 	float4 emission;
 	float shininess;
 
-	float turnOnNormal;
+	float hasDiffuseTexture;
+	float hasNormalMap;
 };
 
 cbuffer cameraData : register(b2)
@@ -74,12 +74,17 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	float3x3 TBN = float3x3(t, b, n);
 
-	if (turnOnNormal)
+	if (hasNormalMap)
 		n = mul(normalMapping.xyz, TBN);
 	n = normalize(n);
 
 	// Adjust the variables below as necessary to work with your own code
-	float4 surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
+	float4 surfaceColor;
+
+	if (hasDiffuseTexture)
+		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
+	else
+		surfaceColor = float4(1.0, 1.0, 1.0, 1.0);
 
 	result += light0.AmbientColor * surfaceColor;
 
@@ -101,6 +106,6 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	result = saturate(result);
 	return result;
-	//return float4(n, 1.0);
+	//return float4(t, 1.0);
 	//return diffuse;
 }
