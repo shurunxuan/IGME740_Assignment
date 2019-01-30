@@ -1,4 +1,7 @@
+#include <cassert>
 #include "SimpleLogger.h"
+
+static SimpleLogger DefaultLogger = SimpleLogger();
 
 std::ostream& operator<<(std::ostream& out, const LogLevel value)
 {
@@ -28,80 +31,55 @@ LogStream::LogStream(const LogLevel logLevel, std::ostream& os, const std::strin
 {
 	level = logLevel;
 	format = fmt;
+	initialized = false;
 }
 
-const LogStream& LogStream::Initialize(const char* file, const char* line, const char* funcsig, LogLevel level)
+const LogStream& LogStream::Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level)
 {
+	assert(initialized);
+	initialized = true;
 	bool escaping = false;
-	for (size_t i = 0; i < format.size(); ++i)
+	for (fmtPtr = 0; fmtPtr < format.size(); ++fmtPtr)
 	{
-		switch (format[i])
+		if (escaping)
 		{
-		case '$':
-		{
-			if (escaping)
+			escaping = false;
+			switch (format[fmtPtr])
 			{
+			case '$':
 				ostream << '$';
-				escaping = false;
-			}
-			else escaping = true;
-		}
-		break;
-		case 'f':
-		{
-			if (escaping)
-			{
+				break;
+			case 't':
+				ostream << time;
+				break;
+			case 'f':
 				ostream << file;
-				escaping = false;
-			}
-			else ostream << 'f';
-		}
-		break;
-		case 'l':
-		{
-			if (escaping)
-			{
+				break;
+			case 'l':
 				ostream << line;
-				escaping = false;
-			}
-			else ostream << 'l';
-		}
-		break;
-		case 's':
-		{
-			if (escaping)
-			{
+				break;
+			case 's':
 				ostream << funcsig;
-				escaping = false;
-			}
-			else ostream << 's';
-		}
-		break;
-		case 'v':
-		{
-			if (escaping)
-			{
+				break;
+			case 'v':
 				ostream << level;
-				escaping = false;
-			}
-			else ostream << 'v';
-		}
-		break;
-		case 'm':
-		{
-			if (escaping)
-			{
+				break;
+			case 'm':
 				return *this;
+			default:
+				assert(true);
+				break;
 			}
-			ostream << 'v';
 		}
-		break;
-		default:
+		else if (format[fmtPtr] == '$')
 		{
-			ostream << i;
+			escaping = true;
 		}
-		break;
+		else
+		{
+			ostream << format[fmtPtr];
 		}
+
 	}
 	return *this;
 }
@@ -111,16 +89,53 @@ void SimpleLogger::Add(LogStream& logStream)
 	logStreams.push_back(logStream);
 }
 
-const SimpleLogger& SimpleLogger::Initialize(const char* file, const char* line, const char* funcsig, LogLevel level)
+const SimpleLogger& SimpleLogger::Initialize(const char* time, const char* file, const char* line, const char* funcsig, LogLevel level)
 {
-
+	for each (LogStream ls in logStreams)
+	{
+		if (level >= ls.level)
+		{
+			ls.Initialize(time, file, line, funcsig, level);
+		}
+	}
 	return *this;
 }
 
+template<typename T>
+const SimpleLogger& SimpleLogger::operator<<(const T& buf) const
+{
+	for each (LogStream ls in logStreams)
+	{
+		ls << buf;
+	}
+	return *this;
+}
+
+
+const SimpleLogger& SimpleLogger::operator<<(LogStream::manipulator pf) const
+{
+	for each (LogStream ls in logStreams)
+	{
+		ls << pf;
+	}
+	return *this;
+}
 
 template <typename T>
 const LogStream& LogStream::operator<<(const T& buf) const
 {
-	ostream << buf;
+	if (initialized)
+		ostream << buf;
 	return *this;
 }
+
+const LogStream& LogStream::operator<<(manipulator pf)
+{
+	if (initialized)
+	{
+		ostream << pf;
+		initialized = false;
+	}
+	return *this;
+}
+

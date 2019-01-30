@@ -1,7 +1,8 @@
-#include "Game.h"
-#include "Vertex.h"
 #include <map>
 #include <array>
+#include "Game.h"
+#include "Vertex.h"
+#include "SimpleLogger.h"
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -73,6 +74,9 @@ Game::~Game()
 // --------------------------------------------------------
 void Game::Init()
 {
+	// Initialize Loggers
+	ADD_LOGGER(LogStream(INFO, cout));
+
 	// Helper methods for loading shaders, creating some basic
 	// geometry to draw and some simple camera matrices.
 	//  - You'll be expanding and/or replacing these later
