@@ -463,7 +463,8 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
 				std::wstring wName = cv.from_bytes(name);
 
-				HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &current_mtl->diffuseSrvPtr);
+				HRESULT hr = DirectX::CreateWICTextureFromFileEx(device, context, wName.c_str(), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE,
+					0, 0, DirectX::WIC_LOADER_FORCE_SRGB, nullptr, &current_mtl->diffuseSrvPtr);
 				if (FAILED(hr))
 				{
 					LOG_WARNING << "Failed to load diffuse texture file \"" << name << "\"." << std::endl;

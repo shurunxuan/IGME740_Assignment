@@ -90,7 +90,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 	{
 		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
 		// Gamma correction
-		surfaceColor.xyz = pow(surfaceColor.xyz, 2.2);
+		//surfaceColor.xyz = pow(surfaceColor.xyz, 2.2);
 	}
 		
 	else
@@ -163,7 +163,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 		result += specularColor * specular;
 	}
 	// Gamma correction
-	result.xyz = pow(result.xyz, 1.0f / 2.2f);
+	//result.xyz = pow(result.xyz, 1.0f / 2.2f);
 
 	result.w = surfaceColor.w;
 	result = saturate(result);
