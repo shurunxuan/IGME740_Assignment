@@ -8,6 +8,7 @@
 struct VertexToPixel
 {
 	float4 position		: SV_POSITION;
+	float4 worldPos		: POSITION;
 	float3 normal		: NORMAL;
 	float2 uv			: TEXCOORD;
 	float3 tangent		: TANGENT;
@@ -68,7 +69,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 	float3 n = normalize(input.normal);
 	float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
 	float3 b = normalize(cross(n, t));
-
+	float3 l;
 	float4 result = float4(0, 0, 0, 0);
 
 	if (hasNormalMap)
@@ -93,24 +94,40 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	for (int i = 0; i < lightCount; ++i)
 	{
-		float3 l = normalize(lights[i].Direction);
+		float intensity = lights[i].Intensity;
+		[call] switch (lights[i].Type)
+		{
+		case 0:
+			// Directional
+			l = normalize(lights[i].Direction);
+			break;
+		case 1:
+			// Point
+			l = lights[i].Position - input.worldPos.xyz;
+			float dist = length(l);
+			float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
+			att *= att;
+			intensity = att * intensity;
+			l = normalize(l);
+			break;
+		}
 		float3 h = normalize(l + v);
 
 		float4 lightColor = float4(lights[i].Color.xyz, 1.0);
 
-		result += lights[i].Intensity * 0.8 * surfaceColor;
+		result += lightColor * intensity * 0.8 * surfaceColor;
 
 		float ndl = dot(n, l);
 		ndl = max(ndl, 0);
 
-		float4 diffuseColor = ndl * lightColor * lights[i].Intensity * surfaceColor;
+		float4 diffuseColor = ndl * lightColor * intensity * surfaceColor;
 		diffuseColor.w = 0;
 		result += diffuseColor * diffuse;
 
 		// Blinn-Phong
 		float ndh = dot(n, h);
 		ndh = max(ndh, 0);
-		float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * lights[i].Color * lights[i].Intensity);
+		float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * lights[i].Color * intensity);
 		float4 specularColor;
 		specularColor.xyz = specularColor3;
 		specularColor.w = 0;

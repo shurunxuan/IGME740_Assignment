@@ -120,8 +120,8 @@ void Game::LoadShaders()
 	lightCount = 2;
 	lights = new Light[lightCount];
 
-	lights[0] = DirectionalLight(XMFLOAT3(0.8f, 0.8f, 0.8f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 0.6f);
-	lights[1] = DirectionalLight(XMFLOAT3(0.8f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 1.0f), 0.6f);
+	lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f);
+	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 0.0f), XMFLOAT3(2.0f,0.0f, 0.0f), 3.0f, 1.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -188,7 +188,7 @@ void Game::OnResize()
 }
 
 // Several small variables to record the direction of the animation
-bool animateLight = true;
+bool animateLight = false;
 bool animateModel = false;
 bool turnOnNormalMap = true;
 // --------------------------------------------------------
@@ -204,6 +204,10 @@ void Game::Update(float deltaTime, float totalTime)
 		XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMStoreFloat3(&lights[0].Direction, lightDirection);
+
+		XMVECTOR lightPosition = XMLoadFloat3(&lights[1].Position);
+		lightPosition = XMVector3Rotate(lightPosition, rotateQ);
+		XMStoreFloat3(&lights[1].Position, lightPosition);
 	}
 
 	if (animateModel)
