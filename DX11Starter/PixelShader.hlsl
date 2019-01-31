@@ -23,7 +23,7 @@ struct Light
 	float Intensity;
 	float3 Color;// 48 bytes
 	float SpotFalloff;
-	float3 Padding;// 64 bytes
+	float3 AmbientColor;// 64 bytes
 };
 
 cbuffer externalData : register(b0)
@@ -91,6 +91,9 @@ float4 main(VertexToPixel input) : SV_TARGET
 	else
 		surfaceColor = float4(1.0, 1.0, 1.0, 1.0);
 
+	float spotAmount = 1.0;
+	float4 ambientColor;
+	ambientColor.w = surfaceColor.w;
 
 	for (int i = 0; i < lightCount; ++i)
 	{
@@ -100,34 +103,55 @@ float4 main(VertexToPixel input) : SV_TARGET
 		case 0:
 			// Directional
 			l = normalize(lights[i].Direction);
+			ambientColor.xyz = lights[i].AmbientColor;
 			break;
 		case 1:
 			// Point
-			l = lights[i].Position - input.worldPos.xyz;
-			float dist = length(l);
-			float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
-			att *= att;
-			intensity = att * intensity;
-			l = normalize(l);
+			{
+				l = lights[i].Position - input.worldPos.xyz;
+				float dist = length(l);
+				float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
+				att *= att;
+				intensity = att * intensity;
+				l = normalize(l);
+				ambientColor.xyz = float3(0, 0, 0);
+			}
+			break;
+		case 2:
+			// Spot
+			{
+				l = lights[i].Position - input.worldPos.xyz;
+				float dist = length(l);
+				float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
+				att *= att;
+				intensity = att * intensity;
+				l = normalize(l);
+				float angleFromCenter = max(dot(-l, lights[i].Direction), 0.0f);
+				if (angleFromCenter < lights[i].SpotFalloff)
+					intensity = 0.0;
+				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);
+				//intensity = spotAmount * intensity;
+				ambientColor.xyz = float3(0, 0, 0);
+		}
 			break;
 		}
 		float3 h = normalize(l + v);
 
 		float4 lightColor = float4(lights[i].Color.xyz, 1.0);
 
-		result += lightColor * intensity * 0.8 * surfaceColor;
+		result += intensity * ambientColor * surfaceColor;
 
 		float ndl = dot(n, l);
 		ndl = max(ndl, 0);
 
-		float4 diffuseColor = ndl * lightColor * intensity * surfaceColor;
+		float4 diffuseColor = ndl * lightColor * intensity * spotAmount * surfaceColor;
 		diffuseColor.w = 0;
 		result += diffuseColor * diffuse;
 
 		// Blinn-Phong
 		float ndh = dot(n, h);
 		ndh = max(ndh, 0);
-		float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * lights[i].Color * intensity);
+		float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * lights[i].Color * intensity * spotAmount);
 		float4 specularColor;
 		specularColor.xyz = specularColor3;
 		specularColor.w = 0;

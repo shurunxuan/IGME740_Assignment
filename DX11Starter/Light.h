@@ -14,10 +14,10 @@ struct Light
 	float Intensity;
 	DirectX::XMFLOAT3 Color;// 48 bytes
 	float SpotFalloff;
-	DirectX::XMFLOAT3 Padding;// 64 bytes
+	DirectX::XMFLOAT3 AmbientColor;// 64 bytes
 };
 
 
-Light DirectionalLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 direction, float intensity);
+Light DirectionalLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 direction, float intensity, DirectX::XMFLOAT3 ambientColor);
 Light PointLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 position, float range, float intensity);
-Light SpotLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 position, DirectX::XMFLOAT3 direction, float spotFalloff, float intensity);
+Light SpotLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 position, DirectX::XMFLOAT3 direction, float range, float spotFalloff, float intensity);
