@@ -120,9 +120,9 @@ void Game::LoadShaders()
 	lightCount = 3;
 	lights = new Light[lightCount];
 
-	lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.8f, 0.8f, 0.8f));
-	lights[1] = PointLight(XMFLOAT3(1.0f, 0.0f, 0.0f), XMFLOAT3(2.0f,0.0f, 0.0f), 3.0f, 1.0f);
-	lights[2] = SpotLight(XMFLOAT3(0.0f, 1.0f, 0.0f), XMFLOAT3(-2.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.5f, 0.0f), 10.0f, 0.8f, 1.0f);
+	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
+	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f,0.0f, 0.0f), 3.0f, 1.0f);
+	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-2.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.5f, 0.0f), 10.0f, 0.8f, 1.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
