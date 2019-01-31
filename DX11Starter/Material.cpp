@@ -1,7 +1,6 @@
 #include "Material.h"
 #include "SimpleLogger.h"
-
-std::shared_ptr<Material> Material::defaultMaterial = std::make_unique<Material>();
+#include "BlinnPhongMaterial.h"
 
 Material::Material(ID3D11Device* d = nullptr)
 {
@@ -81,7 +80,3 @@ void Material::InitializeSampler()
 		LOG_ERROR << "CreateSamplerState failed at <0x" << this << ">." << std::endl;
 }
 
-std::shared_ptr<Material> Material::GetDefault()
-{
-	return defaultMaterial;
-}

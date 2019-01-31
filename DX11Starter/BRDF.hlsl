@@ -26,6 +26,16 @@ struct Light
 	float3 AmbientColor;// 64 bytes
 };
 
+struct Material
+{
+	// Material Data
+	float4 ambient;
+	float4 diffuse;
+	float4 specular;
+	float4 emission;
+	float shininess;
+};
+
 cbuffer externalData : register(b0)
 {
 	Light lights[MAX_LIGHTS];
@@ -34,12 +44,7 @@ cbuffer externalData : register(b0)
 
 cbuffer materialData : register(b1)
 {
-	// Material Data
-	float4 ambient;
-	float4 diffuse;
-	float4 specular;
-	float4 emission;
-	float shininess;
+	Material material;
 
 	float hasDiffuseTexture;
 	float hasNormalMap;
@@ -92,7 +97,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 		// Gamma correction
 		//surfaceColor.xyz = pow(surfaceColor.xyz, 2.2);
 	}
-		
+
 	else
 		surfaceColor = float4(1.0, 1.0, 1.0, 1.0);
 
@@ -137,7 +142,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);
 				//intensity = spotAmount * intensity;
 				ambientColor.xyz = float3(0, 0, 0);
-		}
+			}
 			break;
 		}
 		float3 h = normalize(l + v);
@@ -151,16 +156,16 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 		float4 diffuseColor = ndl * lightColor * intensity * spotAmount * surfaceColor;
 		diffuseColor.w = 0;
-		result += diffuseColor * diffuse;
+		result += diffuseColor * material.diffuse;
 
 		// Blinn-Phong
 		float ndh = dot(n, h);
 		ndh = max(ndh, 0);
-		float3 specularColor3 = saturate(pow(ndh, max(shininess, 10.0)) * lights[i].Color * intensity * spotAmount);
+		float3 specularColor3 = saturate(pow(ndh, max(material.shininess, 10.0)) * lights[i].Color * intensity * spotAmount);
 		float4 specularColor;
 		specularColor.xyz = specularColor3;
 		specularColor.w = 0;
-		result += specularColor * specular;
+		result += specularColor * material.specular;
 	}
 	// Gamma correction
 	//result.xyz = pow(result.xyz, 1.0f / 2.2f);

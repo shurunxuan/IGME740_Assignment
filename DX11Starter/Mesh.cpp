@@ -106,7 +106,7 @@ Material* Mesh::GetMaterial() const
 	if (material == nullptr)
 	{
 		LOG_WARNING << "Material of Mesh <0x" << this << "> is not set! Fallback to default material." << std::endl;
-		return Material::GetDefault().get();
+		return reinterpret_cast<Material*>(BlinnPhongMaterial::GetDefault().get());
 	}
 
 	return material.get();
@@ -117,11 +117,11 @@ void Mesh::SetMaterial(std::shared_ptr<Material> m)
 	material = std::move(m);
 }
 
-std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> Mesh::LoadFromFile(const std::string & filename, ID3D11Device * device, ID3D11DeviceContext * context)
+std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<BlinnPhongMaterial>>> Mesh::LoadFromFile(const std::string & filename, ID3D11Device * device, ID3D11DeviceContext * context)
 {
 	std::vector<std::shared_ptr<Mesh>> meshList;
-	std::vector<std::shared_ptr<Material>> materialList;
-	std::map<std::string, std::shared_ptr<Material>> materialMap;
+	std::vector<std::shared_ptr<BlinnPhongMaterial>> materialList;
+	std::map<std::string, std::shared_ptr<BlinnPhongMaterial>> materialMap;
 
 	std::vector<DirectX::XMFLOAT3> positions;
 	std::vector<DirectX::XMFLOAT3> normals;
@@ -139,7 +139,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 
 	std::string currentMtl;
 
-	materialMap[""] = Material::GetDefault();
+	materialMap[""] = BlinnPhongMaterial::GetDefault();
 
 	// Read .obj file
 	std::ifstream fin(filename);
@@ -400,7 +400,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 		std::ifstream mltFin(mtlFile);
 		LOG_INFO << "MTL file \"" << mtlFile << "\" opened." << std::endl;
 		std::string mtlLine;
-		std::shared_ptr<Material> current_mtl = nullptr;
+		std::shared_ptr<BlinnPhongMaterial> current_mtl = nullptr;
 		std::string currentName;
 		while (getline(mltFin, mtlLine))
 		{
@@ -416,7 +416,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				}
 
 				currentName = s[1];
-				current_mtl = std::make_shared<Material>(device);
+				current_mtl = std::make_shared<BlinnPhongMaterial>(device);
 			}
 			else if (first_token == "Kd")
 			{
@@ -424,7 +424,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->diffuse = DirectX::XMFLOAT4(r, g, b, 1.0f);
+				current_mtl->parameters.diffuse = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ka")
 			{
@@ -432,7 +432,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->ambient = DirectX::XMFLOAT4(r, g, b, 1.0f);
+				current_mtl->parameters.ambient = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ks")
 			{
@@ -440,7 +440,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->specular = DirectX::XMFLOAT4(r, g, b, 1.0f);
+				current_mtl->parameters.specular = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ke")
 			{
@@ -448,12 +448,12 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 				str2num(s[1], r);
 				str2num(s[2], g);
 				str2num(s[3], b);
-				current_mtl->emission = DirectX::XMFLOAT4(r, g, b, 1.0f);
+				current_mtl->parameters.emission = DirectX::XMFLOAT4(r, g, b, 1.0f);
 			}
 			else if (first_token == "Ns")
 			{
 				//current_mtl->shininess = 20;
-				str2num(s[1], current_mtl->shininess);
+				str2num(s[1], current_mtl->parameters.shininess);
 			}
 			else if (first_token == "map_Kd")
 			{
@@ -503,7 +503,7 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	else
 	{
 		LOG_INFO << "No mtl data in file \"" << filename << "\" found. Fallback to default material." << std::endl;
-		materialList.push_back(Material::GetDefault());
+		materialList.push_back(BlinnPhongMaterial::GetDefault());
 	}
 
 	// Set Material of Mesh
@@ -513,6 +513,6 @@ std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Materi
 	}
 
 
-	std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> result(meshList, materialList);
+	std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<BlinnPhongMaterial>>> result(meshList, materialList);
 	return result;
 }

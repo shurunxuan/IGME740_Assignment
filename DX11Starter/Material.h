@@ -21,14 +21,9 @@ public:
 
 	void InitializeSampler();
 
-	static std::shared_ptr<Material> GetDefault();
 
-	// Some parameters for lighting
-	DirectX::XMFLOAT4 ambient = { 1.0f, 1.0f, 1.0f, 1.0f };
-	DirectX::XMFLOAT4 diffuse = { 0.0f, 0.0f, 0.0f, 1.0f };
-	DirectX::XMFLOAT4 specular = { 0.0f, 0.0f, 0.0f, 1.0f };
-	DirectX::XMFLOAT4 emission = { 0.0f, 0.0f, 0.0f, 1.0f };
-	float shininess = 0.0f;
+	virtual size_t GetMaterialStruct(void** mtlPtr) = 0;
+
 	// texture
 	ID3D11ShaderResourceView* diffuseSrvPtr;
 	ID3D11ShaderResourceView* normalSrvPtr;
@@ -44,6 +39,6 @@ private:
 	D3D11_SAMPLER_DESC samplerDesc;
 	ID3D11SamplerState* samplerState;
 
-	static std::shared_ptr<Material> defaultMaterial;
+
 };
 

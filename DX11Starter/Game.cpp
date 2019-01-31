@@ -111,10 +111,10 @@ void Game::LoadShaders()
 	vertexShader->LoadShaderFile(L"VertexShader.cso");
 
 	pixelShader = new SimplePixelShader(device, context);
-	pixelShader->LoadShaderFile(L"PixelShader.cso");
+	pixelShader->LoadShaderFile(L"BlinnPhong.cso");
 
-	Material::GetDefault()->SetVertexShaderPtr(vertexShader);
-	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
+	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
+	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(pixelShader);
 
 	// Initialize Light
 	lightCount = 3;
@@ -338,12 +338,14 @@ void Game::Draw(float deltaTime, float totalTime)
 				lights,							// The address of the data to copy
 				sizeof(Light) * 128);		// The size of the data to copy
 
-			// Lighting Data
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("ambient", entities[i]->GetMeshAt(j)->GetMaterial()->ambient);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("diffuse", entities[i]->GetMeshAt(j)->GetMaterial()->diffuse);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("specular", entities[i]->GetMeshAt(j)->GetMaterial()->specular);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
+			void* materialData;
+			const size_t materialSize = entities[i]->GetMeshAt(j)->GetMaterial()->GetMaterialStruct(&materialData);
+			// Material Data
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"material",
+				materialData,
+				materialSize
+			);
 
 			const bool hasNormalMap = entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr != nullptr;
 			const bool hasDiffuseTexture = entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr != nullptr;
