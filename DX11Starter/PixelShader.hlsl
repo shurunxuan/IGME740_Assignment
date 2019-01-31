@@ -131,7 +131,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 				att *= att;
 				intensity = att * intensity;
 				l = normalize(l);
-				float angleFromCenter = max(dot(-l, lights[i].Direction), 0.0f);
+				float angleFromCenter = max(dot(-l, normalize(lights[i].Direction)), 0.0f);
 				if (angleFromCenter < lights[i].SpotFalloff)
 					intensity = 0.0;
 				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);

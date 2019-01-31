@@ -120,9 +120,12 @@ void Game::LoadShaders()
 	lightCount = 3;
 	lights = new Light[lightCount];
 
+	//lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
+	//lights[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
-	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f,0.0f, 0.0f), 3.0f, 1.0f);
-	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-2.0f, 0.0f, 0.0f), XMFLOAT3(1.0f, 0.5f, 0.0f), 10.0f, 0.8f, 1.0f);
+	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -157,7 +160,7 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\quad.obj", device, context);
+	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 
 	// The shaders are not set yet so we need to set it now.
 	for (const std::shared_ptr<Material>& mat : modelData1.second)
@@ -175,7 +178,7 @@ void Game::CreateBasicGeometry()
 	entities[0]->SetScale(XMFLOAT3(3.0f, 3.0f, 3.0f));
 	XMFLOAT3 y = { 0,1,0 };
 	XMVECTOR yAxis = XMLoadFloat3(&y);
-	XMVECTOR rQ = XMQuaternionRotationAxis(yAxis, 3.1415926f);
+	XMVECTOR rQ = XMQuaternionRotationAxis(yAxis, 3.1415926f / 2.0f);
 	XMFLOAT4 r{};
 	XMStoreFloat4(&r, rQ);
 	entities[0]->SetRotation(r);
@@ -216,11 +219,11 @@ void Game::Update(float deltaTime, float totalTime)
 		lightPosition = XMVector3Rotate(lightPosition, rotateQ);
 		XMStoreFloat3(&lights[1].Position, lightPosition);
 
-		XMFLOAT3 zAxis = { 0.0f, 0.0f, 1.0f };
-		XMVECTOR zVec = XMLoadFloat3(&zAxis);
-		XMVECTOR rotateZQ = XMQuaternionRotationAxis(zVec, deltaTime);
+		XMFLOAT3 xAxis = { 1.0f, 0.0f, 0.0f };
+		XMVECTOR xVec = XMLoadFloat3(&xAxis);
+		XMVECTOR rotateXQ = XMQuaternionRotationAxis(xVec, deltaTime);
 		XMVECTOR spotLightDirection = XMLoadFloat3(&lights[2].Direction);
-		spotLightDirection = XMVector3Rotate(spotLightDirection, rotateZQ);
+		spotLightDirection = XMVector3Rotate(spotLightDirection, rotateXQ);
 		XMStoreFloat3(&lights[2].Direction, spotLightDirection);
 	}
 
