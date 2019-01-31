@@ -204,14 +204,12 @@ float4 main(VertexToPixel input) : SV_TARGET
 		ndl = saturate(ndl);
 
 		// BRDF
-		float ndh = dot(n, h);
-		ndh = max(ndh, 0);
 		float3 specularColor = MicroFacet(ndl, n, v, l, h, material.roughness, material.reflectance);
 
 		// Diffuse energy conservation
 		float3 energyConserveDiffuse = DiffuseEnergyConserve(ndl, specularColor.xyz, material.metalness) * surfaceColor.xyz;
 
-		result += (float4(energyConserveDiffuse, 0.0) * surfaceColor + float4(specularColor, 0.0)) * lightColor;
+		result += saturate((float4(energyConserveDiffuse, 0.0) * surfaceColor + float4(specularColor, 0.0)) * lightColor);
 	}
 	// Gamma correction
 	//result.xyz = pow(result.xyz, 1.0f / 2.2f);
