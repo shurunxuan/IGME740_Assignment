@@ -61,6 +61,6 @@ private:
 
 	// Lighting
 	int lightCount;
-	DirectionalLight* lights;
+	Light* lights;
 };
 

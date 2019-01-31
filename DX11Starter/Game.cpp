@@ -117,13 +117,11 @@ void Game::LoadShaders()
 	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
 
 	// Initialize Light
-	lightCount = 1;
-	lights = new DirectionalLight[lightCount];
+	lightCount = 2;
+	lights = new Light[lightCount];
 
-	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-	lights[0].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[0].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
+	lights[0] = DirectionalLight(XMFLOAT3(0.8f, 0.8f, 0.8f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 0.6f);
+	lights[1] = DirectionalLight(XMFLOAT3(0.8f, 0.0f, 0.0f), XMFLOAT3(1.0f, 1.0f, 1.0f), 0.6f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -312,10 +310,12 @@ void Game::Draw(float deltaTime, float totalTime)
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("lightCount", lightCount);
+
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
-				"light0",					// The name of the (eventual) variable in the shader
+				"lights",					// The name of the (eventual) variable in the shader
 				lights,							// The address of the data to copy
-				sizeof(DirectionalLight));		// The size of the data to copy
+				sizeof(Light) * 128);		// The size of the data to copy
 
 			// Lighting Data
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("ambient", entities[i]->GetMeshAt(j)->GetMaterial()->ambient);
