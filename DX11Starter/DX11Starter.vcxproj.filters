@@ -50,6 +50,9 @@
     <ClCompile Include="BrdfMaterial.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Skybox.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DXCore.h">
@@ -88,6 +91,9 @@
     <ClInclude Include="BrdfMaterial.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Skybox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl">
@@ -97,6 +103,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="BRDF.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="SkyboxPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="SkyboxVS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

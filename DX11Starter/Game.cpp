@@ -5,7 +5,9 @@
 #include "SimpleLogger.h"
 #include <iostream>
 #include <fstream>
+#include <DDSTextureLoader.h>
 #include "BrdfMaterial.h"
+#include <codecvt>
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -50,12 +52,14 @@ Game::~Game()
 	if (indexBuffer) { indexBuffer->Release(); }
 
 	if (blendState) { blendState->Release(); }
-
+	if (depthStencilState) { depthStencilState->Release(); }
 	// Delete our simple shader objects, which
 	// will clean up their own internal DirectX stuff
 	delete vertexShader;
 	delete blinnPhongPixelShader;
 	delete brdfPixelShader;
+	delete skyboxVertexShader;
+	delete skyboxPixelShader;
 
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
@@ -64,6 +68,8 @@ Game::~Game()
 		delete entities[i];
 	}
 	delete[] entities;
+
+	delete skybox;
 
 	// Delete Camera
 	delete camera;
@@ -82,7 +88,7 @@ Game::~Game()
 void Game::Init()
 {
 	// Initialize Loggers
-	ADD_LOGGER(debug, std::cout);
+	ADD_LOGGER(info, std::cout);
 
 	fout.open("log.txt");
 	if (fout.is_open())
@@ -99,6 +105,49 @@ void Game::Init()
 	// geometric primitives (points, lines or triangles) we want to draw.  
 	// Essentially: "What kind of shape should the GPU draw with our data?"
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// Alpha Blending
+	D3D11_BLEND_DESC BlendState;
+	ZeroMemory(&BlendState, sizeof(D3D11_BLEND_DESC));
+	BlendState.RenderTarget[0].BlendEnable = TRUE;
+	BlendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	BlendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	BlendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	BlendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	BlendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	BlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	BlendState.RenderTarget[0].RenderTargetWriteMask = 0x0f;
+	device->CreateBlendState(&BlendState, &blendState);
+	context->OMSetBlendState(blendState, nullptr, 0xFFFFFF);
+
+	// Depth Stencil Test
+	D3D11_DEPTH_STENCIL_DESC dsDesc;
+
+	// Depth test parameters
+	dsDesc.DepthEnable = true;
+	dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+	dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+
+	// Stencil test parameters
+	dsDesc.StencilEnable = false;
+	dsDesc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+	dsDesc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+
+	// Stencil operations if pixel is front-facing
+	dsDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	dsDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+	dsDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	dsDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+	// Stencil operations if pixel is back-facing
+	dsDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	dsDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+	dsDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	dsDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+	// Create depth stencil state
+	device->CreateDepthStencilState(&dsDesc, &depthStencilState);
+	context->OMSetDepthStencilState(depthStencilState, 0);
 }
 
 // --------------------------------------------------------
@@ -118,8 +167,53 @@ void Game::LoadShaders()
 	brdfPixelShader = new SimplePixelShader(device, context);
 	brdfPixelShader->LoadShaderFile(L"BRDF.cso");
 
+	skyboxVertexShader = new SimpleVertexShader(device, context);
+	skyboxVertexShader->LoadShaderFile(L"SkyboxVS.cso");
+
+	skyboxPixelShader = new SimplePixelShader(device, context);
+	skyboxPixelShader->LoadShaderFile(L"SkyboxPS.cso");
+
 	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
 	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
+
+	//std::string filename;
+
+	//// Open a file
+	//OPENFILENAME ofn;
+	//char fileBuf[260];
+	//char pathBuf[260];
+	//int bytes = GetModuleFileName(NULL, pathBuf, 260);
+	//for (--bytes; bytes != 0; --bytes)
+	//{
+	//	if (pathBuf[bytes] == '\\')
+	//		break;
+	//}
+	//pathBuf[bytes] = '\0';
+	//ZeroMemory(&ofn, sizeof(ofn));
+	//ofn.lStructSize = sizeof(ofn);
+	//ofn.hwndOwner = hWnd;
+	//ofn.lpstrFile = fileBuf;
+	//ofn.lpstrFile[0] = '\0';
+	//ofn.nMaxFile = sizeof(fileBuf);
+	//ofn.lpstrFilter = "CubeMap file\0*.dds\0";
+	//ofn.nFilterIndex = 1;
+	//ofn.lpstrFileTitle = nullptr;
+	//ofn.nMaxFileTitle = 0;
+	//ofn.lpstrInitialDir = pathBuf;
+	//ofn.lpstrTitle = "Choose a cubemap";
+	//ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	//// Display the Open dialog box. 
+
+	//while (!GetOpenFileName(&ofn))
+	//{
+	//	LOG_ERROR << "You did not choose a file. A cubemap file for skybox must be opened." << std::endl;
+	//}
+	//filename = fileBuf;
+
+	skybox = new Skybox(device, context, "models\\Skyboxes\\SanFrancisco.dds");
+	skybox->SetVertexShader(skyboxVertexShader);
+	skybox->SetPixelShader(skyboxPixelShader);
 
 	// Initialize Light
 	lightCount = 3;
@@ -131,21 +225,6 @@ void Game::LoadShaders()
 	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
 	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
 	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
-
-	// Alpha Blending
-	D3D11_BLEND_DESC BlendState;
-	ZeroMemory(&BlendState, sizeof(D3D11_BLEND_DESC));
-	BlendState.RenderTarget[0].BlendEnable = TRUE;
-	BlendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-	BlendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-	BlendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-	BlendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-	BlendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-	BlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-	BlendState.RenderTarget[0].RenderTargetWriteMask = 0x0f;
-	device->CreateBlendState(&BlendState, &blendState);
-	context->OMSetBlendState(blendState, nullptr, 0xFFFFFF);
-
 }
 
 
@@ -165,6 +244,40 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
+	//std::string filename;
+	//// Open a file
+	//OPENFILENAME ofn;
+	//char fileBuf[260];
+	//char pathBuf[260];
+	//int bytes = GetModuleFileName(NULL, pathBuf, 260);
+	//for (--bytes; bytes != 0; --bytes)
+	//{
+	//	if (pathBuf[bytes] == '\\')
+	//		break;
+	//}
+	//pathBuf[bytes] = '\0';
+	//ZeroMemory(&ofn, sizeof(ofn));
+	//ofn.lStructSize = sizeof(ofn);
+	//ofn.hwndOwner = hWnd;
+	//ofn.lpstrFile = fileBuf;
+	//ofn.lpstrFile[0] = '\0';
+	//ofn.nMaxFile = sizeof(fileBuf);
+	//ofn.lpstrFilter = "OBJ model file\0*.obj\0";
+	//ofn.nFilterIndex = 1;
+	//ofn.lpstrFileTitle = nullptr;
+	//ofn.nMaxFileTitle = 0;
+	//ofn.lpstrInitialDir = pathBuf;
+	//ofn.lpstrTitle = "Choose a model";
+	//ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	//// Display the Open dialog box. 
+
+	//while (!GetOpenFileName(&ofn))
+	//{
+	//	LOG_ERROR << "You did not choose a file. A cubemap file for skybox must be opened." << std::endl;
+	//}
+	//filename = fileBuf;
+
 	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 
 	//// The shaders are not set yet so we need to set it now.
@@ -504,6 +617,48 @@ void Game::Draw(float deltaTime, float totalTime)
 				0);								// Offset to add to each index when looking up vertices
 		}
 	}
+
+
+	// Render Skybox
+	XMFLOAT3 camPos = camera->GetPosition();
+	XMFLOAT4X4 worldMat{};
+	XMFLOAT4X4 viewMat{};
+	XMFLOAT4X4 projMat{};
+	XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
+	XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
+	XMStoreFloat4x4(&worldMat, XMMatrixTranspose(XMMatrixTranslation(camPos.x, camPos.y, camPos.z)));
+
+	bool result;
+	result = skybox->GetVertexShader()->SetMatrix4x4("world", worldMat);
+	if (!result) LOG_WARNING << "Error setting parameter " << "world" << " to skybox vertex shader. Variable not found." << std::endl;
+
+	result = skybox->GetVertexShader()->SetMatrix4x4("view", viewMat);
+	if (!result) LOG_WARNING << "Error setting parameter " << "view" << " to skybox vertex shader. Variable not found." << std::endl;
+
+	result = skybox->GetVertexShader()->SetMatrix4x4("projection", projMat);
+	if (!result) LOG_WARNING << "Error setting parameter " << "projection" << " to vertex skybox shader. Variable not found." << std::endl;
+
+	// Sampler and Texture
+	result = skybox->GetPixelShader()->SetSamplerState("basicSampler", skybox->GetSamplerState());
+	if (!result) LOG_WARNING << "Error setting sampler state " << "basicSampler" << " to skybox pixel shader. Variable not found." << std::endl;
+	result = skybox->GetPixelShader()->SetShaderResourceView("cubemapTexture", skybox->GetCubemapSrv());
+	if (!result) LOG_WARNING << "Error setting shader resource view " << "cubemapTexture" << " to skybox pixel shader. Variable not found." << std::endl;
+
+	skybox->GetVertexShader()->CopyAllBufferData();
+	skybox->GetPixelShader()->CopyAllBufferData();
+
+	skybox->GetVertexShader()->SetShader();
+	skybox->GetPixelShader()->SetShader();
+
+	ID3D11Buffer * vertexBuffer = skybox->GetVertexBuffer();
+	ID3D11Buffer * indexBuffer = skybox->GetIndexBuffer();
+
+	UINT stride = sizeof(Vertex);
+	UINT offset = 0;
+	context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+	context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+	context->DrawIndexed(36, 0, 0);
 
 
 

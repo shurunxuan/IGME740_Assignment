@@ -113,3 +113,8 @@ DirectX::XMFLOAT3 FirstPersonCamera::GetRight() const
 
 	return right;
 }
+
+DirectX::XMFLOAT3 FirstPersonCamera::GetPosition() const
+{
+	return position;
+}
