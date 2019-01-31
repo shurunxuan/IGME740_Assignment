@@ -149,6 +149,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BlinnPhongMaterial.cpp" />
+    <ClCompile Include="BrdfMaterial.cpp" />
     <ClCompile Include="FirstPersonCamera.cpp" />
     <ClCompile Include="DXCore.cpp" />
     <ClCompile Include="Game.cpp" />
@@ -162,6 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BlinnPhongMaterial.h" />
+    <ClInclude Include="BrdfMaterial.h" />
     <ClInclude Include="FirstPersonCamera.h" />
     <ClInclude Include="DXCore.h" />
     <ClInclude Include="Game.h" />

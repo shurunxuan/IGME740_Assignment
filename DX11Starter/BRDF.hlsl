@@ -29,11 +29,9 @@ struct Light
 struct Material
 {
 	// Material Data
-	float4 ambient;
-	float4 diffuse;
-	float4 specular;
-	float4 emission;
-	float shininess;
+	float3 reflectance;
+	float roughness;
+	float metalness;
 };
 
 cbuffer externalData : register(b0)
@@ -59,15 +57,73 @@ Texture2D diffuseTexture  : register(t0);
 Texture2D normalTexture  : register(t1);
 SamplerState basicSampler : register(s0);
 
-// --------------------------------------------------------
-// The entry point (main method) for our pixel shader
-// 
-// - Input is the data coming down the pipeline (defined by the struct)
-// - Output is a single color (float4)
-// - Has a special semantic (SV_TARGET), which means 
-//    "put the output of this into the current render target"
-// - Named "main" because that's the default the shader compiler looks for
-// --------------------------------------------------------
+float SpecDistribution(float3 n, float3 h, float roughness)
+{
+	// Pre-calculations
+	float NdotH = saturate(dot(n, h));
+	float NdotH2 = NdotH * NdotH;
+	float a = roughness * roughness; // Remap roughness (Unreal)
+	float a2 = max(a * a, 0.00001); // Applied after remap!
+
+	// ((n dot h)^2 * (a^2 - 1) + 1)
+	float denomToSquare = NdotH2 * (a2 - 1) + 1;
+	// Can go to zero if roughness is 0 and NdotH is 1
+
+	// Final value
+	return a2 / (3.14159265 * denomToSquare * denomToSquare);
+}
+
+// f0 ranges from 0.04 for non-metals to
+// a specific specular color for metals
+float3 Fresnel(float3 v, float3 h, float3 f0)
+{
+	// Pre-calculations
+	float VdotH = saturate(dot(v, h));
+
+	// Final value
+	return f0 + (1 - f0) * pow(1 - VdotH, 5);
+}
+
+// k is remapped to a / 2 (a is roughness^2)
+// roughness remapped to (r+1)/2
+float GeometricShadowing(
+	float NdV, float3 h, float roughness)
+{
+	// End result of remapping:
+	float k = pow(roughness + 1, 2) / 8.0f;
+	float NdotV = saturate(NdV);
+
+	// Final value
+	return NdotV / (NdotV * (1 - k) + k);
+}
+
+float3 MicroFacet(float NdL, float3 n, float3 v, float3 l, float3 h, float roughness, float3 reflectance)
+{
+	float NdV = dot(n, v);
+	// Grab various functions
+	float  D = SpecDistribution(n, h, roughness);
+	float3 F = Fresnel(v, h, reflectance);
+	float  G =
+		GeometricShadowing(NdV, h, roughness) *
+		GeometricShadowing(NdL, h, roughness);
+
+	// Final formula
+	// Note: NdotV or NdotL may go to zero!
+	// Some implementations use max(NdotV, NdotL)
+	return
+		(D * F * G) / (4 * max(NdV, NdL));
+}
+
+float3 DiffuseEnergyConserve(
+	float diffuse, float3 specular, float metalness)
+{
+	return
+		diffuse *
+		((1 - saturate(specular)) * (1 - metalness));
+}
+
+
+
 float4 main(VertexToPixel input) : SV_TARGET
 {
 	float3 v = normalize(-CameraDirection);
@@ -93,17 +149,15 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	if (hasDiffuseTexture)
 	{
-		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv);
+		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv) * float4(material.reflectance.xyz, 1.0);
 		// Gamma correction
 		//surfaceColor.xyz = pow(surfaceColor.xyz, 2.2);
 	}
 
 	else
-		surfaceColor = float4(1.0, 1.0, 1.0, 1.0);
+		surfaceColor = float4(material.reflectance.xyz, 1.0);
 
 	float spotAmount = 1.0;
-	float4 ambientColor;
-	ambientColor.w = surfaceColor.w;
 
 	for (int i = 0; i < lightCount; ++i)
 	{
@@ -113,7 +167,6 @@ float4 main(VertexToPixel input) : SV_TARGET
 		case 0:
 			// Directional
 			l = normalize(lights[i].Direction);
-			ambientColor.xyz = lights[i].AmbientColor;
 			break;
 		case 1:
 			// Point
@@ -124,7 +177,6 @@ float4 main(VertexToPixel input) : SV_TARGET
 				att *= att;
 				intensity = att * intensity;
 				l = normalize(l);
-				ambientColor.xyz = float3(0, 0, 0);
 			}
 			break;
 		case 2:
@@ -141,31 +193,25 @@ float4 main(VertexToPixel input) : SV_TARGET
 					intensity = 0.0;
 				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);
 				//intensity = spotAmount * intensity;
-				ambientColor.xyz = float3(0, 0, 0);
 			}
 			break;
 		}
 		float3 h = normalize(l + v);
 
 		float4 lightColor = float4(lights[i].Color.xyz, 1.0);
-
-		result += intensity * ambientColor * surfaceColor;
-
+		lightColor = lightColor * intensity * spotAmount;
 		float ndl = dot(n, l);
-		ndl = max(ndl, 0);
+		ndl = saturate(ndl);
 
-		float4 diffuseColor = ndl * lightColor * intensity * spotAmount * surfaceColor;
-		diffuseColor.w = 0;
-		result += diffuseColor * material.diffuse;
-
-		// Blinn-Phong
+		// BRDF
 		float ndh = dot(n, h);
 		ndh = max(ndh, 0);
-		float3 specularColor3 = saturate(pow(ndh, max(material.shininess, 10.0)) * lights[i].Color * intensity * spotAmount);
-		float4 specularColor;
-		specularColor.xyz = specularColor3;
-		specularColor.w = 0;
-		result += specularColor * material.specular;
+		float3 specularColor = MicroFacet(ndl, n, v, l, h, material.roughness, material.reflectance);
+
+		// Diffuse energy conservation
+		float3 energyConserveDiffuse = DiffuseEnergyConserve(ndl, specularColor.xyz, material.metalness) * surfaceColor.xyz;
+
+		result += (float4(energyConserveDiffuse, 0.0) * surfaceColor + float4(specularColor, 0.0)) * lightColor;
 	}
 	// Gamma correction
 	//result.xyz = pow(result.xyz, 1.0f / 2.2f);

@@ -43,7 +43,8 @@ private:
 
 	// Wrappers for DirectX shaders to provide simplified functionality
 	SimpleVertexShader* vertexShader;
-	SimplePixelShader* pixelShader;
+	SimplePixelShader* blinnPhongPixelShader;
+	SimplePixelShader* brdfPixelShader;
 
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
