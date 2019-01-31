@@ -6,6 +6,7 @@
 #include <vector>
 #include "Vertex.h"
 #include "Material.h"
+#include "BlinnPhongMaterial.h"
 
 class Mesh
 {
@@ -21,7 +22,7 @@ public:
 
 	void SetMaterial(std::shared_ptr<Material> m);
 
-	static std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<Material>>> LoadFromFile(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* context);
+	static std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<BlinnPhongMaterial>>> LoadFromFile(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* context);
 
 private:
 	// Buffers to hold actual geometry data

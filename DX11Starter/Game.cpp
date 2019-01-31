@@ -5,6 +5,7 @@
 #include "SimpleLogger.h"
 #include <iostream>
 #include <fstream>
+#include "BrdfMaterial.h"
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -53,7 +54,8 @@ Game::~Game()
 	// Delete our simple shader objects, which
 	// will clean up their own internal DirectX stuff
 	delete vertexShader;
-	delete pixelShader;
+	delete blinnPhongPixelShader;
+	delete brdfPixelShader;
 
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
@@ -110,20 +112,25 @@ void Game::LoadShaders()
 	vertexShader = new SimpleVertexShader(device, context);
 	vertexShader->LoadShaderFile(L"VertexShader.cso");
 
-	pixelShader = new SimplePixelShader(device, context);
-	pixelShader->LoadShaderFile(L"PixelShader.cso");
+	blinnPhongPixelShader = new SimplePixelShader(device, context);
+	blinnPhongPixelShader->LoadShaderFile(L"BlinnPhong.cso");
 
-	Material::GetDefault()->SetVertexShaderPtr(vertexShader);
-	Material::GetDefault()->SetPixelShaderPtr(pixelShader);
+	brdfPixelShader = new SimplePixelShader(device, context);
+	brdfPixelShader->LoadShaderFile(L"BRDF.cso");
+
+	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
+	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
 
 	// Initialize Light
-	lightCount = 1;
-	lights = new DirectionalLight[lightCount];
+	lightCount = 3;
+	lights = new Light[lightCount];
 
-	lights[0].AmbientColor = XMFLOAT4(0.8f, 0.8f, 0.8f, 1.0f);
-	lights[0].DiffuseColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[0].SpecularColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	lights[0].Direction = XMFLOAT3(-1.0f, 1.0f, 0.0f);
+	//lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
+	//lights[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
+	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
+	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 
 	// Alpha Blending
 	D3D11_BLEND_DESC BlendState;
@@ -160,11 +167,43 @@ void Game::CreateBasicGeometry()
 {
 	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 
-	// The shaders are not set yet so we need to set it now.
-	for (const std::shared_ptr<Material>& mat : modelData1.second)
+	//// The shaders are not set yet so we need to set it now.
+	//for (const std::shared_ptr<Material>& mat : modelData1.second)
+	//{
+	//	mat->SetVertexShaderPtr(vertexShader);
+	//	mat->SetPixelShaderPtr(blinnPhongPixelShader);
+	//}
+
+
+	for (const auto& mesh : modelData1.first)
 	{
-		mat->SetVertexShaderPtr(vertexShader);
-		mat->SetPixelShaderPtr(pixelShader);
+		auto originalMaterial = mesh->GetMaterial();
+		// Test the new BRDF Material
+		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
+		// Gold
+		//brdfMaterial->parameters.reflectance = { 1.0f, 0.765557f, 0.336057f };
+		brdfMaterial->parameters.reflectance = { 1.0f, 1.0f, 1.0f };
+		brdfMaterial->parameters.roughness = 0.4f;
+		brdfMaterial->parameters.metalness = 0.1f;
+		ID3D11Resource* resource;
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+		if (originalMaterial->diffuseSrvPtr)
+		{
+			originalMaterial->diffuseSrvPtr->GetResource(&resource);
+			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
+			resource->Release();
+			brdfMaterial->InitializeSampler();
+		}
+		if (originalMaterial->normalSrvPtr)
+		{
+			originalMaterial->normalSrvPtr->GetResource(&resource);
+			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
+			resource->Release();
+			brdfMaterial->InitializeSampler();
+		}
+		mesh->SetMaterial(brdfMaterial);
 	}
 
 	entityCount = 1;
@@ -174,6 +213,12 @@ void Game::CreateBasicGeometry()
 	// Create GameEntity & Initial Transform
 	entities[0] = new GameEntity(modelData1.first);
 	entities[0]->SetScale(XMFLOAT3(3.0f, 3.0f, 3.0f));
+	XMFLOAT3 y = { 0,1,0 };
+	XMVECTOR yAxis = XMLoadFloat3(&y);
+	XMVECTOR rQ = XMQuaternionRotationAxis(yAxis, 3.1415926f / 2.0f);
+	XMFLOAT4 r{};
+	XMStoreFloat4(&r, rQ);
+	entities[0]->SetRotation(r);
 }
 
 
@@ -190,7 +235,7 @@ void Game::OnResize()
 }
 
 // Several small variables to record the direction of the animation
-bool animateLight = true;
+bool animateLight = false;
 bool animateModel = false;
 bool turnOnNormalMap = true;
 // --------------------------------------------------------
@@ -206,6 +251,17 @@ void Game::Update(float deltaTime, float totalTime)
 		XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMStoreFloat3(&lights[0].Direction, lightDirection);
+
+		XMVECTOR lightPosition = XMLoadFloat3(&lights[1].Position);
+		lightPosition = XMVector3Rotate(lightPosition, rotateQ);
+		XMStoreFloat3(&lights[1].Position, lightPosition);
+
+		XMFLOAT3 xAxis = { 1.0f, 0.0f, 0.0f };
+		XMVECTOR xVec = XMLoadFloat3(&xAxis);
+		XMVECTOR rotateXQ = XMQuaternionRotationAxis(xVec, deltaTime);
+		XMVECTOR spotLightDirection = XMLoadFloat3(&lights[2].Direction);
+		spotLightDirection = XMVector3Rotate(spotLightDirection, rotateXQ);
+		XMStoreFloat3(&lights[2].Direction, spotLightDirection);
 	}
 
 	if (animateModel)
@@ -267,6 +323,56 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		turnOnNormalMap = !turnOnNormalMap;
 	}
+	// Set Roughness
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x1))
+	{
+		for (int i = 0; i < entityCount; ++i)
+		{
+			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+			{
+				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
+				material->parameters.roughness += 0.1f;
+				if (material->parameters.roughness > 1.0f) material->parameters.roughness = 1.0f;
+			}
+		}
+	}
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x1))
+	{
+		for (int i = 0; i < entityCount; ++i)
+		{
+			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+			{
+				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
+				material->parameters.roughness -= 0.1f;
+				if (material->parameters.roughness < 0.0f) material->parameters.roughness = 0.0f;
+			}
+		}
+	}
+	// Set Metalness
+	if ((GetAsyncKeyState('2') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x1))
+	{
+		for (int i = 0; i < entityCount; ++i)
+		{
+			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+			{
+				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
+				material->parameters.metalness += 0.1f;
+				if (material->parameters.metalness > 1.0f) material->parameters.metalness = 1.0f;
+			}
+		}
+	}
+	if ((GetAsyncKeyState('2') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x1))
+	{
+		for (int i = 0; i < entityCount; ++i)
+		{
+			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+			{
+				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
+				material->parameters.metalness -= 0.1f;
+				if (material->parameters.metalness < 0.0f) material->parameters.metalness = 0.0f;
+			}
+		}
+	}
 
 	// Quit if the escape key is pressed
 	if (GetAsyncKeyState(VK_ESCAPE))
@@ -279,7 +385,8 @@ void Game::Update(float deltaTime, float totalTime)
 void Game::Draw(float deltaTime, float totalTime)
 {
 	// Background color (Cornflower Blue in this case) for clearing
-	const float color[4] = { 0.4f, 0.6f, 0.75f, 0.0f };
+	const float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	//const float color[4] = { 0.4f, 0.6f, 0.75f, 0.0f };
 
 	// Clear the render target and depth buffer (erases what's on the screen)
 	//  - Do this ONCE PER FRAME
@@ -307,35 +414,60 @@ void Game::Draw(float deltaTime, float totalTime)
 			XMFLOAT4X4 projMat{};
 			XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
 			XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("itworld", entities[i]->GetWorldMatrixIT());
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
+			bool result;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+			if (!result) LOG_WARNING << "Error setting parameter " << "world" << " to vertex shader. Variable not found." << std::endl;
 
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
-				"light0",					// The name of the (eventual) variable in the shader
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("itworld", entities[i]->GetWorldMatrixIT());
+			if (!result) LOG_WARNING << "Error setting parameter " << "itworld" << " to vertex shader. Variable not found." << std::endl;
+
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("view", viewMat);
+			if (!result) LOG_WARNING << "Error setting parameter " << "view" << " to vertex shader. Variable not found." << std::endl;
+
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
+			if (!result) LOG_WARNING << "Error setting parameter " << "projection" << " to vertex shader. Variable not found." << std::endl;
+
+
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("lightCount", lightCount);
+			if (!result) LOG_WARNING << "Error setting parameter " << "lightCount" << " to pixel shader. Variable not found." << std::endl;
+
+
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"lights",					// The name of the (eventual) variable in the shader
 				lights,							// The address of the data to copy
-				sizeof(DirectionalLight));		// The size of the data to copy
+				sizeof(Light) * 128);		// The size of the data to copy
+			if (!result) LOG_WARNING << "Error setting parameter " << "lights" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
-			// Lighting Data
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("ambient", entities[i]->GetMeshAt(j)->GetMaterial()->ambient);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("diffuse", entities[i]->GetMeshAt(j)->GetMaterial()->diffuse);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("specular", entities[i]->GetMeshAt(j)->GetMaterial()->specular);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat4("emission", entities[i]->GetMeshAt(j)->GetMaterial()->emission);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shininess", entities[i]->GetMeshAt(j)->GetMaterial()->shininess);
+
+			void* materialData;
+			const size_t materialSize = entities[i]->GetMeshAt(j)->GetMaterial()->GetMaterialStruct(&materialData);
+			// Material Data
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
+				"material",
+				materialData,
+				int(materialSize)
+			);
+			if (!result) LOG_WARNING << "Error setting parameter " << "material" << " to pixel shader. Variable not found or size incorrect." << std::endl;
+
 
 			const bool hasNormalMap = entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr != nullptr;
 			const bool hasDiffuseTexture = entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr != nullptr;
 
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasNormalMap", turnOnNormalMap && hasNormalMap ? 1.0f : 0.0f);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasNormalMap", turnOnNormalMap && hasNormalMap ? 1.0f : 0.0f);
+			if (!result) LOG_WARNING << "Error setting parameter " << "hasNormalMap" << " to pixel shader. Variable not found or size incorrect." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
+			if (!result) LOG_WARNING << "Error setting parameter " << "hasDiffuseTexture" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
+			if (!result) LOG_WARNING << "Error setting parameter " << "CameraDirection" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
 			// Sampler and Texture
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr);
-			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("normalTexture", entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr);
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
+			if (!result) LOG_WARNING << "Error setting sampler state " << "basicSampler" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr);
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "diffuseTexture" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("normalTexture", entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr);
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "normalTexture" << " to pixel shader. Variable not found." << std::endl;
 
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
