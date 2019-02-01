@@ -249,7 +249,7 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	entityCount = 121;
+	entityCount = 1;
 	entities = new GameEntity * [entityCount];
 
 	// Create GameEntity & Initial Transform
@@ -413,53 +413,53 @@ void Game::Update(float deltaTime, float totalTime)
 		currentSkybox += 1;
 		currentSkybox %= skyboxCount;
 	}
-
+	const float materialSpeed = 0.5f;
 	// Set Roughness
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x1))
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_LEFT) & 0x8000))
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
 			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 			{
 				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
-				material->parameters.roughness += 0.1f;
+				material->parameters.roughness += materialSpeed * deltaTime;
 				if (material->parameters.roughness > 1.0f) material->parameters.roughness = 1.0f;
 			}
 		}
 	}
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x1))
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_RIGHT) & 0x8000))
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
 			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 			{
 				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
-				material->parameters.roughness -= 0.1f;
+				material->parameters.roughness -= materialSpeed * deltaTime;
 				if (material->parameters.roughness < 0.0f) material->parameters.roughness = 0.0f;
 			}
 		}
 	}
 	// Set Metalness
-	if ((GetAsyncKeyState('2') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x1))
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x8000))
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
 			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 			{
 				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
-				material->parameters.metalness += 0.1f;
+				material->parameters.metalness += materialSpeed * deltaTime;
 				if (material->parameters.metalness > 1.0f) material->parameters.metalness = 1.0f;
 			}
 		}
 	}
-	if ((GetAsyncKeyState('2') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x1))
+	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x8000))
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
 			for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 			{
 				BrdfMaterial* material = reinterpret_cast<BrdfMaterial*>(entities[i]->GetMeshAt(j)->GetMaterial());
-				material->parameters.metalness -= 0.1f;
+				material->parameters.metalness -= materialSpeed * deltaTime;
 				if (material->parameters.metalness < 0.0f) material->parameters.metalness = 0.0f;
 			}
 		}

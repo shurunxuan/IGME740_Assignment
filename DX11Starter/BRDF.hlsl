@@ -1,4 +1,5 @@
 #define MAX_LIGHTS 128
+#define FLT_EPSILON 1.19209290E-07F
 
 // Struct representing the data we expect to receive from earlier pipeline stages
 // - Should match the output of our corresponding vertex shader
@@ -62,19 +63,37 @@ TextureCube irradianceMap : register(t4);
 SamplerState basicSampler : register(s0);
 SamplerState anisotropic : register(s1);
 
-// Lys constants
-static const float k0 = 0.00098, k1 = 0.9921, fUserMaxSPow = 0.2425;
-static const float g_fMaxT = (exp2(-10.0 / sqrt(fUserMaxSPow)) - k0) / k1;
+// https://www.knaldtech.com/docs/doku.php?id=specular_lys
 static const int nMipOffset = 0;
 
-// Lys function, copy/pasted from https://www.knaldtech.com/docs/doku.php?id=specular_lys
-float GetSpecPowToMip(float fSpecPow, int nMips)
+float RoughnessFromPerceptualRoughness(float fPerceptualRoughness)
 {
-	// This line was added because ShaderTool destroys mipmaps.
-	fSpecPow = 1 - pow(1 - fSpecPow, 4);
-	// Default curve - Inverse of Toolbag 2 curve with adjusted constants.
-	float fSmulMaxT = (exp2(-10.0 / sqrt(fSpecPow)) - k0) / k1;
-	return float(nMips - 1 - nMipOffset) * (1.0 - clamp(fSmulMaxT / g_fMaxT, 0.0, 1.0));
+	return fPerceptualRoughness * fPerceptualRoughness;
+}
+
+float PerceptualRoughnessFromRoughness(float fRoughness)
+{
+	return sqrt(max(0.0, fRoughness));
+}
+
+float SpecularPowerFromPerceptualRoughness(float fPerceptualRoughness)
+{
+	float fRoughness = RoughnessFromPerceptualRoughness(fPerceptualRoughness);
+	return (2.0 / max(FLT_EPSILON, fRoughness * fRoughness)) - 2.0;
+}
+
+float PerceptualRoughnessFromSpecularPower(float fSpecPower)
+{
+	float fRoughness = sqrt(2.0 / (fSpecPower + 2.0));
+	return PerceptualRoughnessFromRoughness(fRoughness);
+}
+
+float BurleyToMip(float fPerceptualRoughness, int nMips, float NdR)
+{
+	float fSpecPower = SpecularPowerFromPerceptualRoughness(fPerceptualRoughness);
+	fSpecPower /= (4 * max(NdR, FLT_EPSILON));
+	float fScale = PerceptualRoughnessFromSpecularPower(fSpecPower);
+	return fScale * (nMips - 1 - nMipOffset);
 }
 
 float3 DiffuseEnergyConserve(float diffuse, float3 specular, float metalness)
@@ -90,10 +109,10 @@ float3 RadianceIBLIntegration(float NdV, float roughness)
 
 float3 IBL(float3 n, float3 v, float3 l)
 {
+	float3 r = normalize(reflect(-v, n));
 	float NdV = max(dot(n, v), 0.0);
 	float NdL = max(dot(n, l), 0.0);
-
-	float3 refVec = normalize(reflect(-v, n));
+	float NdR = max(dot(n, r), 0.0);
 
 	int mipLevels, width, height;
 	cubemap.GetDimensions(0, width, height, mipLevels);
@@ -101,9 +120,9 @@ float3 IBL(float3 n, float3 v, float3 l)
 	float3 result = RadianceIBLIntegration(NdV, material.roughness);
 
 	float3 diffuseImageLighting = irradianceMap.Sample(basicSampler, mul(float4(n, 0.0), SkyboxRotation).xyz).rgb;
-	float3 specularImageLighting = cubemap.SampleLevel(basicSampler, mul(float4(refVec, 0.0), SkyboxRotation).xyz, GetSpecPowToMip(material.roughness, mipLevels)).rgb;
+	float3 specularImageLighting = cubemap.SampleLevel(basicSampler, mul(float4(r, 0.0), SkyboxRotation).xyz, BurleyToMip(pow(material.roughness, 0.5), mipLevels, NdR)).rgb;
 
-	float4 specularColor = float4(lerp(0.04f.rrr, material.albedo, material.metalness), 1.0f);
+	float4 specularColor = float4(lerp(0.12f.rrr, material.albedo, material.metalness), 1.0f);
 	float4 schlickFresnel = saturate(specularColor + (1 - specularColor) * pow(1 - NdV, 5));
 
 	float3 diffuseResult = diffuseImageLighting * material.albedo;
@@ -122,8 +141,8 @@ float3 GGX(float3 n, float3 l, float3 v)
 	float3 h = normalize(l + v);
 	float NdH = saturate(dot(n, h));
 
-	float rough2 = max(material.roughness * material.roughness, 0.002);
-	float rough4 = rough2 * rough2;
+	float rough2 = material.roughness * material.roughness;
+	float rough4 = max(rough2 * rough2, FLT_EPSILON);
 
 	float d = (NdH * rough4 - NdH) * NdH + 1.0f;
 	float D = rough4 / (3.14159265 * (d * d));
