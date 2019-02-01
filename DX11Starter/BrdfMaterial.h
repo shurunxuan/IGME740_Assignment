@@ -16,7 +16,7 @@ public:
 		DirectX::XMFLOAT4 emission = { 0.0f, 0.0f, 0.0f, 1.0f };
 		float shininess = 0.0f;*/
 		// F_0
-		DirectX::XMFLOAT3 reflectance = { 1.0f, 1.0f, 1.0f };
+		DirectX::XMFLOAT3 albedo = { 1.0f, 1.0f, 1.0f };
 		float roughness = 0.5f;
 		float metalness = 0.5f;
 	} parameters;

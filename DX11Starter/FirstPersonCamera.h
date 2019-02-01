@@ -17,6 +17,8 @@ public:
 	DirectX::XMFLOAT3 GetForward() const;
 	DirectX::XMFLOAT3 GetRight() const;
 
+	DirectX::XMFLOAT3 GetPosition() const;
+
 private:
 	DirectX::XMFLOAT3 position;
 	DirectX::XMFLOAT3 direction;
