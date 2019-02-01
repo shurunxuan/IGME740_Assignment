@@ -29,12 +29,12 @@ struct Light
 struct Material
 {
 	// Material Data
-	float3 reflectance;
+	float3 albedo;
 	float roughness;
 	float metalness;
 };
 
-cbuffer externalData : register(b0)
+cbuffer lightData : register(b0)
 {
 	Light lights[MAX_LIGHTS];
 	int lightCount;
@@ -51,78 +51,103 @@ cbuffer materialData : register(b1)
 cbuffer cameraData : register(b2)
 {
 	float3 CameraDirection;
+	float4x4 SkyboxRotation;
 };
 
 Texture2D diffuseTexture  : register(t0);
 Texture2D normalTexture  : register(t1);
+Texture2D preIntegrated : register(t2);
+TextureCube cubemap : register(t3);
+TextureCube irradianceMap : register(t4);
 SamplerState basicSampler : register(s0);
+SamplerState anisotropic : register(s1);
 
-float SpecDistribution(float3 n, float3 h, float roughness)
+// Lys constants
+static const float k0 = 0.00098, k1 = 0.9921, fUserMaxSPow = 0.2425;
+static const float g_fMaxT = (exp2(-10.0 / sqrt(fUserMaxSPow)) - k0) / k1;
+static const int nMipOffset = 0;
+
+// Lys function, copy/pasted from https://www.knaldtech.com/docs/doku.php?id=specular_lys
+float GetSpecPowToMip(float fSpecPow, int nMips)
 {
-	// Pre-calculations
-	float NdotH = saturate(dot(n, h));
-	float NdotH2 = NdotH * NdotH;
-	float a = roughness * roughness; // Remap roughness (Unreal)
-	float a2 = max(a * a, 0.00001); // Applied after remap!
-
-	// ((n dot h)^2 * (a^2 - 1) + 1)
-	float denomToSquare = NdotH2 * (a2 - 1) + 1;
-	// Can go to zero if roughness is 0 and NdotH is 1
-
-	// Final value
-	return a2 / (3.14159265 * denomToSquare * denomToSquare);
+	// This line was added because ShaderTool destroys mipmaps.
+	fSpecPow = 1 - pow(1 - fSpecPow, 4);
+	// Default curve - Inverse of Toolbag 2 curve with adjusted constants.
+	float fSmulMaxT = (exp2(-10.0 / sqrt(fSpecPow)) - k0) / k1;
+	return float(nMips - 1 - nMipOffset) * (1.0 - clamp(fSmulMaxT / g_fMaxT, 0.0, 1.0));
 }
 
-// f0 ranges from 0.04 for non-metals to
-// a specific specular color for metals
-float3 Fresnel(float3 v, float3 h, float3 f0)
+float3 DiffuseEnergyConserve(float diffuse, float3 specular, float metalness)
 {
-	// Pre-calculations
-	float VdotH = saturate(dot(v, h));
-
-	// Final value
-	return f0 + (1 - f0) * pow(1 - VdotH, 5);
+	return diffuse * ((1 - saturate(specular)) * (1 - metalness));
 }
 
-// k is remapped to a / 2 (a is roughness^2)
-// roughness remapped to (r+1)/2
-float GeometricShadowing(
-	float NdV, float3 h, float roughness)
+float3 RadianceIBLIntegration(float NdV, float roughness)
 {
-	// End result of remapping:
-	float k = pow(roughness + 1, 2) / 8.0f;
-	float NdotV = saturate(NdV);
-
-	// Final value
-	return NdotV / (NdotV * (1 - k) + k);
+	float2 preintegratedFG = preIntegrated.Sample(anisotropic, float2(roughness, 1.0f - NdV)).rg;
+	return material.albedo * preintegratedFG.r + preintegratedFG.g;
 }
 
-float3 MicroFacet(float NdL, float3 n, float3 v, float3 l, float3 h, float roughness, float3 reflectance)
+float3 IBL(float3 n, float3 v, float3 l)
 {
-	float NdV = dot(n, v);
-	// Grab various functions
-	float  D = SpecDistribution(n, h, roughness);
-	float3 F = Fresnel(v, h, reflectance);
-	float  G =
-		GeometricShadowing(NdV, h, roughness) *
-		GeometricShadowing(NdL, h, roughness);
+	float NdV = max(dot(n, v), 0.0);
+	float NdL = max(dot(n, l), 0.0);
 
-	// Final formula
-	// Note: NdotV or NdotL may go to zero!
-	// Some implementations use max(NdotV, NdotL)
-	return
-		(D * F * G) / (4 * max(NdV, NdL));
+	float3 refVec = normalize(reflect(-v, n));
+
+	int mipLevels, width, height;
+	cubemap.GetDimensions(0, width, height, mipLevels);
+
+	float3 result = RadianceIBLIntegration(NdV, material.roughness);
+
+	float3 diffuseImageLighting = irradianceMap.Sample(basicSampler, mul(float4(n, 0.0), SkyboxRotation).xyz).rgb;
+	float3 specularImageLighting = cubemap.SampleLevel(basicSampler, mul(float4(refVec, 0.0), SkyboxRotation).xyz, GetSpecPowToMip(material.roughness, mipLevels)).rgb;
+
+	float4 specularColor = float4(lerp(0.04f.rrr, material.albedo, material.metalness), 1.0f);
+	float4 schlickFresnel = saturate(specularColor + (1 - specularColor) * pow(1 - NdV, 5));
+
+	float3 diffuseResult = diffuseImageLighting * material.albedo;
+	float3 specularResult = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel);
+
+	return result + specularResult;
 }
 
-float3 DiffuseEnergyConserve(
-	float diffuse, float3 specular, float metalness)
+float FresnelSchlick(float f0, float fd90, float view)
 {
-	return
-		diffuse *
-		((1 - saturate(specular)) * (1 - metalness));
+	return f0 + (fd90 - f0) * pow(max(1.0f - view, 0.1f), 5.0f);
 }
 
+float3 GGX(float3 n, float3 l, float3 v)
+{
+	float3 h = normalize(l + v);
+	float NdH = saturate(dot(n, h));
 
+	float rough2 = max(material.roughness * material.roughness, 0.002);
+	float rough4 = rough2 * rough2;
+
+	float d = (NdH * rough4 - NdH) * NdH + 1.0f;
+	float D = rough4 / (3.14159265 * (d * d));
+
+	float3 specularColor = lerp(0.04, material.albedo, material.metalness);
+	float3 reflectivity = specularColor;
+	float fresnel = 1.0;
+
+	float NdL = saturate(dot(n, l));
+	float LdH = saturate(dot(l, h));
+	float NdV = saturate(dot(n, v));
+	float VdH = saturate(dot(v, h));
+
+	float3 F = reflectivity + (float3(1.0, 1.0, 1.0) - reflectivity) * pow(1 - LdH, 5);
+
+	//float k = rough2 * 0.5f;
+	//float G_SmithL = NdL / (NdL * (1.0f - k) + k);
+	//float G_SmithV = NdV / (NdV * (1.0f - k) + k);
+	//float G = (G_SmithL * G_SmithV);
+
+	float G = min(1, min(2 * NdH * NdV / VdH, 2 * NdH * NdL / VdH));
+
+	return G * D * F;
+}
 
 float4 main(VertexToPixel input) : SV_TARGET
 {
@@ -132,6 +157,8 @@ float4 main(VertexToPixel input) : SV_TARGET
 	float3 b = normalize(cross(n, t));
 	float3 l;
 	float4 result = float4(0, 0, 0, 0);
+	float4 directLighting = float4(0, 0, 0, 0);
+	float4 indirectLighting = float4(0, 0, 0, 0);
 
 	if (hasNormalMap)
 	{
@@ -149,15 +176,20 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 	if (hasDiffuseTexture)
 	{
-		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv) * float4(material.reflectance.xyz, 1.0);
+		surfaceColor = diffuseTexture.Sample(basicSampler, input.uv) * float4(material.albedo.xyz, 1.0);
 		// Gamma correction
 		//surfaceColor.xyz = pow(surfaceColor.xyz, 2.2);
 	}
-
 	else
-		surfaceColor = float4(material.reflectance.xyz, 1.0);
+		surfaceColor = float4(material.albedo.xyz, 1.0);
 
 	float spotAmount = 1.0;
+
+	// Cubemap Reflection
+	float4 sampleDirection = float4(reflect(-v, n), 0.0);
+
+	float4 diffuse = float4(0, 0, 0, 0);
+	float4 specular = float4(0, 0, 0, 0);
 
 	for (int i = 0; i < lightCount; ++i)
 	{
@@ -192,31 +224,30 @@ float4 main(VertexToPixel input) : SV_TARGET
 				if (angleFromCenter < lights[i].SpotFalloff)
 					intensity = 0.0;
 				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);
+				spotAmount = saturate(spotAmount);
 				//intensity = spotAmount * intensity;
 			}
 			break;
 		}
 		float3 h = normalize(l + v);
+		float NdL = saturate(dot(n, l));
+		float NdV = saturate(dot(n, v));
 
-		float4 lightColor = float4(lights[i].Color.xyz, 1.0);
-		lightColor = lightColor * intensity * spotAmount;
-		float ndl = dot(n, l);
-		ndl = saturate(ndl);
+		float4 lightColor = float4(lights[i].Color.xyz, 0.0);
+		intensity = saturate(intensity * spotAmount);
 
-		// BRDF
-		float3 specularColor = MicroFacet(ndl, n, v, l, h, material.roughness, material.reflectance);
+		float diffuseFactor = NdL;
+		float4 specularColor = NdL * float4(GGX(n, l, v), 0.0f) * lightColor * intensity;
 
-		// Diffuse energy conservation
-		float3 energyConserveDiffuse = DiffuseEnergyConserve(ndl, specularColor.xyz, material.metalness) * surfaceColor.xyz;
+		specular += specularColor;
 
-		result += saturate((float4(energyConserveDiffuse, 0.0) * surfaceColor + float4(specularColor, 0.0)) * lightColor);
+		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness);
+		diffuse += float4(diffuseColor, 0.0) * lightColor * intensity;
 	}
-	// Gamma correction
-	//result.xyz = pow(result.xyz, 1.0f / 2.2f);
 
+	result = surfaceColor * diffuse + specular + float4(IBL(n, v, l), 0.0f);
 	result.w = surfaceColor.w;
 	result = saturate(result);
 	return result;
-	//return float4(t, 1.0);
 	//return diffuse;
 }

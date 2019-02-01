@@ -4,7 +4,7 @@ struct VertexToPixel
 	float3 direction	: POSITION;
 };
 
-TextureCube cubemapTexture  : register(t2);
+TextureCube cubemapTexture  : register(t5);
 SamplerState basicSampler : register(s0);
 
 float4 main(VertexToPixel input) : SV_TARGET

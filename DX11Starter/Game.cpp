@@ -8,6 +8,8 @@
 #include <DDSTextureLoader.h>
 #include "BrdfMaterial.h"
 #include <codecvt>
+#include <WICTextureLoader.h>
+#include "BlinnPhongMaterial.h"
 
 // For the DirectX Math library
 using namespace DirectX;
@@ -61,6 +63,9 @@ Game::~Game()
 	delete skyboxVertexShader;
 	delete skyboxPixelShader;
 
+	if (anisotropicSampler) { anisotropicSampler->Release(); }
+	if (preIntegratedSrv) { preIntegratedSrv->Release(); }
+
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -69,7 +74,11 @@ Game::~Game()
 	}
 	delete[] entities;
 
-	delete skybox;
+	for (int i = 0; i < skyboxCount; ++i)
+	{
+		delete skyboxes[i];
+	}
+	delete[] skyboxes;
 
 	// Delete Camera
 	delete camera;
@@ -77,8 +86,6 @@ Game::~Game()
 	// Delete Light
 	delete[] lights;
 
-	// Close logging file
-	fout.close();
 }
 
 // --------------------------------------------------------
@@ -89,10 +96,6 @@ void Game::Init()
 {
 	// Initialize Loggers
 	ADD_LOGGER(info, std::cout);
-
-	fout.open("log.txt");
-	if (fout.is_open())
-		ADD_LOGGER_FMT(info, fout, "<$t> [$v] $m\n\tFile: $f:$l\n\tFunc: $s");
 
 	// Helper methods for loading shaders, creating some basic
 	// geometry to draw and some simple camera matrices.
@@ -173,58 +176,60 @@ void Game::LoadShaders()
 	skyboxPixelShader = new SimplePixelShader(device, context);
 	skyboxPixelShader->LoadShaderFile(L"SkyboxPS.cso");
 
+	// Load Pre Integrated Texture
+	// texture file
+	std::string name = "model\\ibl_brdf_lut.png";
+	// string -> wstring
+	std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
+	std::wstring wName = cv.from_bytes(name);
+	HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &preIntegratedSrv);
+	if (FAILED(hr))
+	{
+		LOG_WARNING << "Failed to load pre-integrated texture file \"" << name << "\"." << std::endl;
+	}
+	else
+	{
+		LOG_INFO << "Load pre-integrated texture file \"" << name << "\"." << std::endl;
+	}
+
+	D3D11_SAMPLER_DESC samplerDesc;
+	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	hr = device->CreateSamplerState(&samplerDesc, &anisotropicSampler);
+	if (FAILED(hr))
+		LOG_ERROR << "Failed to create anisotropic sampler." << std::endl;
+
 	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
 	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
 
-	//std::string filename;
-
-	//// Open a file
-	//OPENFILENAME ofn;
-	//char fileBuf[260];
-	//char pathBuf[260];
-	//int bytes = GetModuleFileName(NULL, pathBuf, 260);
-	//for (--bytes; bytes != 0; --bytes)
-	//{
-	//	if (pathBuf[bytes] == '\\')
-	//		break;
-	//}
-	//pathBuf[bytes] = '\0';
-	//ZeroMemory(&ofn, sizeof(ofn));
-	//ofn.lStructSize = sizeof(ofn);
-	//ofn.hwndOwner = hWnd;
-	//ofn.lpstrFile = fileBuf;
-	//ofn.lpstrFile[0] = '\0';
-	//ofn.nMaxFile = sizeof(fileBuf);
-	//ofn.lpstrFilter = "CubeMap file\0*.dds\0";
-	//ofn.nFilterIndex = 1;
-	//ofn.lpstrFileTitle = nullptr;
-	//ofn.nMaxFileTitle = 0;
-	//ofn.lpstrInitialDir = pathBuf;
-	//ofn.lpstrTitle = "Choose a cubemap";
-	//ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-	//// Display the Open dialog box. 
-
-	//while (!GetOpenFileName(&ofn))
-	//{
-	//	LOG_ERROR << "You did not choose a file. A cubemap file for skybox must be opened." << std::endl;
-	//}
-	//filename = fileBuf;
-
-	skybox = new Skybox(device, context, "models\\Skyboxes\\SanFrancisco.dds");
-	skybox->SetVertexShader(skyboxVertexShader);
-	skybox->SetPixelShader(skyboxPixelShader);
+	skyboxCount = 3;
+	skyboxes = new Skybox * [skyboxCount];
+	skyboxes[0] = new Skybox(device, context, "models\\Skyboxes\\Environment2HiDef.cubemap.dds", "models\\Skyboxes\\Environment2Light.cubemap.dds");
+	skyboxes[1] = new Skybox(device, context, "models\\Skyboxes\\Environment3HiDef.cubemap.dds", "models\\Skyboxes\\Environment3Light.cubemap.dds");
+	skyboxes[2] = new Skybox(device, context, "models\\Skyboxes\\Environment1HiDef.cubemap.dds", "models\\Skyboxes\\Environment1Light.cubemap.dds");
+	currentSkybox = 0;
+	for (int i = 0; i < skyboxCount; ++i)
+	{
+		skyboxes[i]->SetVertexShader(skyboxVertexShader);
+		skyboxes[i]->SetPixelShader(skyboxPixelShader);
+	}
 
 	// Initialize Light
-	lightCount = 3;
+	lightCount = 1;
 	lights = new Light[lightCount];
 
 	//lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
 	//lights[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
 	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
-	lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
-	lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
+	//lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 }
 
 
@@ -244,59 +249,23 @@ void Game::CreateMatrices()
 // --------------------------------------------------------
 void Game::CreateBasicGeometry()
 {
-	//std::string filename;
-	//// Open a file
-	//OPENFILENAME ofn;
-	//char fileBuf[260];
-	//char pathBuf[260];
-	//int bytes = GetModuleFileName(NULL, pathBuf, 260);
-	//for (--bytes; bytes != 0; --bytes)
-	//{
-	//	if (pathBuf[bytes] == '\\')
-	//		break;
-	//}
-	//pathBuf[bytes] = '\0';
-	//ZeroMemory(&ofn, sizeof(ofn));
-	//ofn.lStructSize = sizeof(ofn);
-	//ofn.hwndOwner = hWnd;
-	//ofn.lpstrFile = fileBuf;
-	//ofn.lpstrFile[0] = '\0';
-	//ofn.nMaxFile = sizeof(fileBuf);
-	//ofn.lpstrFilter = "OBJ model file\0*.obj\0";
-	//ofn.nFilterIndex = 1;
-	//ofn.lpstrFileTitle = nullptr;
-	//ofn.nMaxFileTitle = 0;
-	//ofn.lpstrInitialDir = pathBuf;
-	//ofn.lpstrTitle = "Choose a model";
-	//ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+	entityCount = 121;
+	entities = new GameEntity * [entityCount];
 
-	//// Display the Open dialog box. 
-
-	//while (!GetOpenFileName(&ofn))
-	//{
-	//	LOG_ERROR << "You did not choose a file. A cubemap file for skybox must be opened." << std::endl;
-	//}
-	//filename = fileBuf;
-
+	// Create GameEntity & Initial Transform
 	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 
-	//// The shaders are not set yet so we need to set it now.
-	//for (const std::shared_ptr<Material>& mat : modelData1.second)
-	//{
-	//	mat->SetVertexShaderPtr(vertexShader);
-	//	mat->SetPixelShaderPtr(blinnPhongPixelShader);
-	//}
+	entities[0] = new GameEntity(modelData1.first);
+	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
 
-
-	for (const auto& mesh : modelData1.first)
+	for (int k = 0; k < entities[0]->GetMeshCount(); ++k)
 	{
-		auto originalMaterial = mesh->GetMaterial();
+		auto originalMaterial = entities[0]->GetMeshAt(k)->GetMaterial();
 		// Test the new BRDF Material
 		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
 		// Gold
-		//brdfMaterial->parameters.reflectance = { 1.0f, 0.765557f, 0.336057f };
-		brdfMaterial->parameters.reflectance = { 1.0f, 1.0f, 1.0f };
-		brdfMaterial->parameters.roughness = 0.4f;
+		brdfMaterial->parameters.albedo = { 1.000000f, 0.765557f, 0.336057f };
+		brdfMaterial->parameters.roughness = 0.5f;
 		brdfMaterial->parameters.metalness = 0.1f;
 		ID3D11Resource* resource;
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
@@ -316,22 +285,8 @@ void Game::CreateBasicGeometry()
 			resource->Release();
 			brdfMaterial->InitializeSampler();
 		}
-		mesh->SetMaterial(brdfMaterial);
+		entities[0]->GetMeshAt(k)->SetMaterial(brdfMaterial);
 	}
-
-	entityCount = 1;
-	entities = new GameEntity * [entityCount];
-
-
-	// Create GameEntity & Initial Transform
-	entities[0] = new GameEntity(modelData1.first);
-	entities[0]->SetScale(XMFLOAT3(3.0f, 3.0f, 3.0f));
-	XMFLOAT3 y = { 0,1,0 };
-	XMVECTOR yAxis = XMLoadFloat3(&y);
-	XMVECTOR rQ = XMQuaternionRotationAxis(yAxis, 3.1415926f / 2.0f);
-	XMFLOAT4 r{};
-	XMStoreFloat4(&r, rQ);
-	entities[0]->SetRotation(r);
 }
 
 
@@ -351,6 +306,7 @@ void Game::OnResize()
 bool animateLight = false;
 bool animateModel = false;
 bool turnOnNormalMap = true;
+bool rotateSkybox = false;
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -387,6 +343,16 @@ void Game::Update(float deltaTime, float totalTime)
 		XMFLOAT4 rot{};
 		XMStoreFloat4(&rot, modelRotation);
 		entities[0]->SetRotation(rot);
+	}
+
+	if (rotateSkybox)
+	{
+		XMVECTOR r = skyboxes[currentSkybox]->GetRotationQuaternion();
+		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+		XMVECTOR yVec = XMLoadFloat3(&yAxis);
+		XMVECTOR rotateY = XMQuaternionRotationAxis(yVec, deltaTime);
+		r = XMQuaternionMultiply(r, rotateY);
+		skyboxes[currentSkybox]->SetRotationQuaternion(r);
 	}
 
 	// W, A, S, D for moving camera
@@ -436,6 +402,18 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		turnOnNormalMap = !turnOnNormalMap;
 	}
+	if (GetAsyncKeyState('R') & 0x1)
+	{
+		rotateSkybox = !rotateSkybox;
+	}
+
+	// Change Skybox
+	if (GetAsyncKeyState('K') & 0x1)
+	{
+		currentSkybox += 1;
+		currentSkybox %= skyboxCount;
+	}
+
 	// Set Roughness
 	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x1))
 	{
@@ -486,7 +464,6 @@ void Game::Update(float deltaTime, float totalTime)
 			}
 		}
 	}
-
 	// Quit if the escape key is pressed
 	if (GetAsyncKeyState(VK_ESCAPE))
 		Quit();
@@ -574,6 +551,11 @@ void Game::Draw(float deltaTime, float totalTime)
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
 			if (!result) LOG_WARNING << "Error setting parameter " << "CameraDirection" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
+			XMMATRIX skyboxRotationMatrix = XMMatrixTranspose(XMMatrixRotationQuaternion(XMQuaternionInverse(skyboxes[currentSkybox]->GetRotationQuaternion())));
+			XMFLOAT4X4 m{};
+			XMStoreFloat4x4(&m, skyboxRotationMatrix);
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetMatrix4x4("SkyboxRotation", m);
+			if (!result) LOG_WARNING << "Error setting parameter " << "SkyboxRotation" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 			// Sampler and Texture
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
 			if (!result) LOG_WARNING << "Error setting sampler state " << "basicSampler" << " to pixel shader. Variable not found." << std::endl;
@@ -582,6 +564,15 @@ void Game::Draw(float deltaTime, float totalTime)
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("normalTexture", entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr);
 			if (!result) LOG_WARNING << "Error setting shader resource view " << "normalTexture" << " to pixel shader. Variable not found." << std::endl;
 
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("cubemap", skyboxes[currentSkybox]->GetCubemapSrv());
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "cubemap" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("irradianceMap", skyboxes[currentSkybox]->GetIrradianceSrv());
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "irradianceMap" << " to pixel shader. Variable not found." << std::endl;
+
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("anisotropic", anisotropicSampler);
+			if (!result) LOG_WARNING << "Error setting sampler state " << "anisotropic" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("preIntegrated", preIntegratedSrv);
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "preIntegrated" << " to pixel shader. Variable not found." << std::endl;
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
 			//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
@@ -626,32 +617,33 @@ void Game::Draw(float deltaTime, float totalTime)
 	XMFLOAT4X4 projMat{};
 	XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
 	XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
-	XMStoreFloat4x4(&worldMat, XMMatrixTranspose(XMMatrixTranslation(camPos.x, camPos.y, camPos.z)));
+	XMMATRIX w = XMMatrixMultiply(XMMatrixRotationQuaternion(skyboxes[currentSkybox]->GetRotationQuaternion()), XMMatrixTranslation(camPos.x, camPos.y, camPos.z));
+	XMStoreFloat4x4(&worldMat, XMMatrixTranspose(w));
 
 	bool result;
-	result = skybox->GetVertexShader()->SetMatrix4x4("world", worldMat);
+	result = skyboxes[currentSkybox]->GetVertexShader()->SetMatrix4x4("world", worldMat);
 	if (!result) LOG_WARNING << "Error setting parameter " << "world" << " to skybox vertex shader. Variable not found." << std::endl;
 
-	result = skybox->GetVertexShader()->SetMatrix4x4("view", viewMat);
+	result = skyboxes[currentSkybox]->GetVertexShader()->SetMatrix4x4("view", viewMat);
 	if (!result) LOG_WARNING << "Error setting parameter " << "view" << " to skybox vertex shader. Variable not found." << std::endl;
 
-	result = skybox->GetVertexShader()->SetMatrix4x4("projection", projMat);
+	result = skyboxes[currentSkybox]->GetVertexShader()->SetMatrix4x4("projection", projMat);
 	if (!result) LOG_WARNING << "Error setting parameter " << "projection" << " to vertex skybox shader. Variable not found." << std::endl;
 
 	// Sampler and Texture
-	result = skybox->GetPixelShader()->SetSamplerState("basicSampler", skybox->GetSamplerState());
+	result = skyboxes[currentSkybox]->GetPixelShader()->SetSamplerState("basicSampler", skyboxes[currentSkybox]->GetSamplerState());
 	if (!result) LOG_WARNING << "Error setting sampler state " << "basicSampler" << " to skybox pixel shader. Variable not found." << std::endl;
-	result = skybox->GetPixelShader()->SetShaderResourceView("cubemapTexture", skybox->GetCubemapSrv());
+	result = skyboxes[currentSkybox]->GetPixelShader()->SetShaderResourceView("cubemapTexture", skyboxes[currentSkybox]->GetCubemapSrv());
 	if (!result) LOG_WARNING << "Error setting shader resource view " << "cubemapTexture" << " to skybox pixel shader. Variable not found." << std::endl;
 
-	skybox->GetVertexShader()->CopyAllBufferData();
-	skybox->GetPixelShader()->CopyAllBufferData();
+	skyboxes[currentSkybox]->GetVertexShader()->CopyAllBufferData();
+	skyboxes[currentSkybox]->GetPixelShader()->CopyAllBufferData();
 
-	skybox->GetVertexShader()->SetShader();
-	skybox->GetPixelShader()->SetShader();
+	skyboxes[currentSkybox]->GetVertexShader()->SetShader();
+	skyboxes[currentSkybox]->GetPixelShader()->SetShader();
 
-	ID3D11Buffer * vertexBuffer = skybox->GetVertexBuffer();
-	ID3D11Buffer * indexBuffer = skybox->GetIndexBuffer();
+	ID3D11Buffer * vertexBuffer = skyboxes[currentSkybox]->GetVertexBuffer();
+	ID3D11Buffer * indexBuffer = skyboxes[currentSkybox]->GetIndexBuffer();
 
 	UINT stride = sizeof(Vertex);
 	UINT offset = 0;

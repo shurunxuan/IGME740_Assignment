@@ -4,16 +4,22 @@
 #include <locale>
 #include <codecvt>
 
-Skybox::Skybox(ID3D11Device* d, ID3D11DeviceContext* c, const std::string& cubemapFile)
+Skybox::Skybox(ID3D11Device* d, ID3D11DeviceContext* c, const std::string& cubemapFile, const std::string& irradianceFile)
 {
 	device = d;
 	context = c;
+
+	rotation = DirectX::XMQuaternionIdentity();
 
 	// string -> wstring
 	std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
 	std::wstring wFilename = cv.from_bytes(cubemapFile);
 	// Load cubemap
 	DirectX::CreateDDSTextureFromFile(device, context, wFilename.c_str(), &cubemapTex, &cubemapSrv);
+
+	wFilename = cv.from_bytes(irradianceFile);
+	// Load irradiance map
+	DirectX::CreateDDSTextureFromFile(device, context, wFilename.c_str(), &irradianceTex, &irradianceSrv);
 
 	Vertex vertices[8];
 
@@ -107,7 +113,11 @@ Skybox::~Skybox()
 	if (samplerState) { samplerState->Release(); }
 
 	if (cubemapTex) { cubemapTex->Release(); }
-	if (cubemapSrv) { cubemapSrv->Release(); }
+	if (cubemapSrv) { cubemapSrv->Release(); }	
+	if (irradianceTex) { irradianceTex->Release(); }
+	if (irradianceSrv) { irradianceSrv->Release(); }
+
+	LOG_INFO << "Skybox destroyed at 0x<" << this << ">." << std::endl;
 }
 
 ID3D11Buffer* Skybox::GetVertexBuffer() const
@@ -148,4 +158,19 @@ ID3D11SamplerState* Skybox::GetSamplerState() const
 ID3D11ShaderResourceView* Skybox::GetCubemapSrv() const
 {
 	return cubemapSrv;
+}
+
+ID3D11ShaderResourceView* Skybox::GetIrradianceSrv() const
+{
+	return irradianceSrv;
+}
+
+DirectX::XMVECTOR Skybox::GetRotationQuaternion() const
+{
+	return rotation;
+}
+
+void Skybox::SetRotationQuaternion(DirectX::XMVECTOR& r)
+{
+	rotation = r;
 }

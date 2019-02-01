@@ -4,4 +4,7 @@ Download 3D models for Assignment 5, 6 and later releases [here](https://github.
 
 ## Progress
 
-![Progress](miscs/progress.gif)
+![Progress1](miscs/progress1.jpg)
+![Progress2](miscs/progress2.jpg)
+![Progress3](miscs/progress3.jpg)
+![Progress4](miscs/progress4.jpg)

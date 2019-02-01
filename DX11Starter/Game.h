@@ -55,11 +55,14 @@ private:
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
 
-	// Logging file
-	std::ofstream fout;
-
 	// Skybox
-	Skybox* skybox;
+	int skyboxCount;
+	int currentSkybox;
+	Skybox** skyboxes;
+
+	// Pre Integrated
+	ID3D11SamplerState* anisotropicSampler;
+	ID3D11ShaderResourceView* preIntegratedSrv;
 
 	// Store the GameEntity data
 	int entityCount;
