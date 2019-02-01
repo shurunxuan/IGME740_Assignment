@@ -193,7 +193,7 @@ void Game::LoadShaders()
 	}
 
 	D3D11_SAMPLER_DESC samplerDesc;
-	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+	ZeroMemory(&samplerDesc, sizeof samplerDesc);
 
 	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -415,7 +415,7 @@ void Game::Update(float deltaTime, float totalTime)
 	}
 	const float materialSpeed = 0.5f;
 	// Set Roughness
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_LEFT) & 0x8000))
+	if (GetAsyncKeyState(VK_LEFT) & 0x8000)
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
@@ -427,7 +427,7 @@ void Game::Update(float deltaTime, float totalTime)
 			}
 		}
 	}
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_RIGHT) & 0x8000))
+	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
@@ -440,7 +440,7 @@ void Game::Update(float deltaTime, float totalTime)
 		}
 	}
 	// Set Metalness
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_UP) & 0x8000))
+	if (GetAsyncKeyState(VK_UP) & 0x8000)
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
@@ -452,7 +452,7 @@ void Game::Update(float deltaTime, float totalTime)
 			}
 		}
 	}
-	if ((GetAsyncKeyState('1') & 0x8000) && (GetAsyncKeyState(VK_DOWN) & 0x8000))
+	if (GetAsyncKeyState(VK_DOWN) & 0x8000)
 	{
 		for (int i = 0; i < entityCount; ++i)
 		{
