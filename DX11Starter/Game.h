@@ -44,6 +44,12 @@ private:
 	// Depth Stencil Test
 	ID3D11DepthStencilState* depthStencilState;
 
+	// Front Face Culling & Back Face Culling render states
+	ID3D11RasterizerState* drawingRenderState;
+	ID3D11RasterizerState* shadowRenderState;
+	ID3D11SamplerState* comparisonSampler;
+
+
 	// Wrappers for DirectX shaders to provide simplified functionality
 	SimpleVertexShader* vertexShader;
 	SimplePixelShader* blinnPhongPixelShader;
@@ -60,10 +66,6 @@ private:
 	int currentSkybox;
 	Skybox** skyboxes;
 
-	// Pre Integrated
-	ID3D11SamplerState* anisotropicSampler;
-	ID3D11ShaderResourceView* preIntegratedSrv;
-
 	// Store the GameEntity data
 	int entityCount;
 	GameEntity** entities;
@@ -73,6 +75,9 @@ private:
 
 	// Lighting
 	int lightCount;
-	Light* lights;
+	Light** lights;
+	LightStructure* lightData;
+	SimpleVertexShader* shadowVertexShader;
+	SimplePixelShader* shadowPixelShader;
 };
 

@@ -1,4 +1,4 @@
-#define MAX_LIGHTS 128
+#define MAX_LIGHTS 24
 
 // Struct representing the data we expect to receive from earlier pipeline stages
 // - Should match the output of our corresponding vertex shader
@@ -7,11 +7,12 @@
 // - Each variable must have a semantic, which defines its usage
 struct VertexToPixel
 {
-	float4 position		: SV_POSITION;
-	float4 worldPos		: POSITION;
-	float3 normal		: NORMAL;
-	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT;
+	float4 position				: SV_POSITION;	// XYZW position (System Value Position)
+	float4 worldPos				: POSITION0;
+	float3 normal				: NORMAL;
+	float2 uv					: TEXCOORD;
+	float3 tangent				: TANGENT;
+	float4 lSpacePos			: POSITION1;
 };
 
 struct Light

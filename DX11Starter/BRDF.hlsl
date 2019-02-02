@@ -1,4 +1,4 @@
-#define MAX_LIGHTS 128
+#define MAX_LIGHTS 24
 #define FLT_EPSILON 1.19209290E-07F
 
 // Struct representing the data we expect to receive from earlier pipeline stages
@@ -8,11 +8,12 @@
 // - Each variable must have a semantic, which defines its usage
 struct VertexToPixel
 {
-	float4 position		: SV_POSITION;
-	float4 worldPos		: POSITION;
-	float3 normal		: NORMAL;
-	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT;
+	float4 position				: SV_POSITION;	// XYZW position (System Value Position)
+	float4 worldPos				: POSITION0;
+	float3 normal				: NORMAL;
+	float2 uv					: TEXCOORD;
+	float3 tangent				: TANGENT;
+	float4 lSpacePos			: POSITION1;
 };
 
 struct Light
@@ -57,11 +58,11 @@ cbuffer cameraData : register(b2)
 
 Texture2D diffuseTexture  : register(t0);
 Texture2D normalTexture  : register(t1);
-Texture2D preIntegrated : register(t2);
-TextureCube cubemap : register(t3);
-TextureCube irradianceMap : register(t4);
+TextureCube cubemap : register(t2);
+TextureCube irradianceMap : register(t3);
+Texture2D shadowMap : register(t4);
 SamplerState basicSampler : register(s0);
-SamplerState anisotropic : register(s1);
+SamplerComparisonState shadowSampler : register(s1);
 
 // https://www.knaldtech.com/docs/doku.php?id=specular_lys
 static const int nMipOffset = 0;
@@ -101,12 +102,6 @@ float3 DiffuseEnergyConserve(float diffuse, float3 specular, float metalness)
 	return diffuse * ((1 - saturate(specular)) * (1 - metalness));
 }
 
-float3 RadianceIBLIntegration(float NdV, float roughness)
-{
-	float2 preintegratedFG = preIntegrated.Sample(anisotropic, float2(roughness, 1.0f - NdV)).rg;
-	return material.albedo * preintegratedFG.r + preintegratedFG.g;
-}
-
 float3 IBL(float3 n, float3 v, float3 l)
 {
 	float3 r = normalize(reflect(-v, n));
@@ -117,18 +112,16 @@ float3 IBL(float3 n, float3 v, float3 l)
 	int mipLevels, width, height;
 	cubemap.GetDimensions(0, width, height, mipLevels);
 
-	float3 result = RadianceIBLIntegration(NdV, material.roughness);
-
 	float3 diffuseImageLighting = irradianceMap.Sample(basicSampler, mul(float4(n, 0.0), SkyboxRotation).xyz).rgb;
 	float3 specularImageLighting = cubemap.SampleLevel(basicSampler, mul(float4(r, 0.0), SkyboxRotation).xyz, BurleyToMip(pow(material.roughness, 0.5), mipLevels, NdR)).rgb;
 
-	float4 specularColor = float4(lerp(0.12f.rrr, material.albedo, material.metalness), 1.0f);
+	float4 specularColor = float4(lerp(0.04f.rrr, material.albedo, material.metalness), 1.0f);
 	float4 schlickFresnel = saturate(specularColor + (1 - specularColor) * pow(1 - NdV, 5));
 
 	float3 diffuseResult = diffuseImageLighting * material.albedo;
-	float3 specularResult = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel);
+	float3 result = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel.xyz);
 
-	return result + specularResult;
+	return result;
 }
 
 float FresnelSchlick(float f0, float fd90, float view)
@@ -178,7 +171,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 	float4 result = float4(0, 0, 0, 0);
 	float4 directLighting = float4(0, 0, 0, 0);
 	float4 indirectLighting = float4(0, 0, 0, 0);
-
+	float3 originalN = n;
 	if (hasNormalMap)
 	{
 		// Normal Mapping
@@ -252,8 +245,34 @@ float4 main(VertexToPixel input) : SV_TARGET
 		float NdL = saturate(dot(n, l));
 		float NdV = saturate(dot(n, v));
 
+		float lighting = 1;
+
+		if (i == 0)
+		{
+			float2 shadowTexCoords;
+			shadowTexCoords.x = 0.5f + (input.lSpacePos.x / input.lSpacePos.w * 0.5f);
+			shadowTexCoords.y = 0.5f - (input.lSpacePos.y / input.lSpacePos.w * 0.5f);
+			float pixelDepth = input.lSpacePos.z / input.lSpacePos.w;
+
+			// Check if the pixel texture coordinate is in the view frustum of the 
+			// light before doing any shadow work.
+			if ((saturate(shadowTexCoords.x) == shadowTexCoords.x) &&
+				(saturate(shadowTexCoords.y) == shadowTexCoords.y) &&
+				(pixelDepth > 0))
+			{
+				// Use the SampleCmpLevelZero Texture2D method (or SampleCmp) to sample from 
+				// the shadow map, just as you would with Direct3D feature level 10_0 and
+				// higher.  Feature level 9_1 only supports LessOrEqual, which returns 0 if
+				// the pixel is in the shadow.
+				lighting = float(shadowMap.SampleCmpLevelZero(
+					shadowSampler,
+					shadowTexCoords,
+					pixelDepth));
+			}
+		}
+
 		float4 lightColor = float4(lights[i].Color.xyz, 0.0);
-		intensity = saturate(intensity * spotAmount);
+		intensity = saturate(intensity * spotAmount) * lighting;
 
 		float diffuseFactor = NdL;
 		float4 specularColor = NdL * float4(GGX(n, l, v), 0.0f) * lightColor * intensity;
@@ -262,11 +281,12 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness);
 		diffuse += float4(diffuseColor, 0.0) * lightColor * intensity;
+
 	}
 
 	result = surfaceColor * diffuse + specular + float4(IBL(n, v, l), 0.0f);
 	result.w = surfaceColor.w;
 	result = saturate(result);
 	return result;
-	//return diffuse;
+	//return float4(lighting, lighting, lighting, 1.0);
 }
