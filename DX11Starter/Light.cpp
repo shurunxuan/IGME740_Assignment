@@ -162,12 +162,12 @@ void Light::UpdateMatrices()
 	{
 	case LIGHT_TYPE_DIR:
 	{
-		const DirectX::XMVECTOR eyeDirection = DirectX::XMVectorScale(DirectX::XMLoadFloat3(&Data->Direction), -1.0f);
+		const DirectX::XMVECTOR eyeDirection = DirectX::XMLoadFloat3(&Data->Direction);
 		const DirectX::XMVECTOR eyePosition = DirectX::XMVectorSubtract(DirectX::XMVectorZero(), DirectX::XMVectorScale(eyeDirection, 50.0f));
 		const DirectX::XMFLOAT3 up{ 0.0f, 1.0f, 0.0f };
 		const DirectX::XMVECTOR upDirection = DirectX::XMLoadFloat3(&up);
 		view = DirectX::XMMatrixTranspose(DirectX::XMMatrixLookToLH(eyePosition, eyeDirection, upDirection));
-		projection = XMMatrixTranspose(DirectX::XMMatrixOrthographicLH(20, 20, 0, 100));
+		projection = XMMatrixTranspose(DirectX::XMMatrixOrthographicLH(10, 10, 0, 100));
 	}
 	break;
 	case LIGHT_TYPE_POINT:

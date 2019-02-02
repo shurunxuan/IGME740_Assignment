@@ -210,12 +210,12 @@ float4 main(VertexToPixel input) : SV_TARGET
 		{
 		case 0:
 			// Directional
-			l = normalize(lights[i].Direction);
+			l = normalize(-lights[i].Direction);
 			break;
 		case 1:
 			// Point
 			{
-				l = lights[i].Position - input.worldPos.xyz;
+				l = input.worldPos.xyz - lights[i].Position;
 				float dist = length(l);
 				float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
 				att *= att;
@@ -226,13 +226,13 @@ float4 main(VertexToPixel input) : SV_TARGET
 		case 2:
 			// Spot
 			{
-				l = lights[i].Position - input.worldPos.xyz;
+				l = input.worldPos.xyz - lights[i].Position;
 				float dist = length(l);
 				float att = saturate(1.0 - dist * dist / (lights[i].Range * lights[i].Range));
 				att *= att;
 				intensity = att * intensity;
 				l = normalize(l);
-				float angleFromCenter = max(dot(-l, normalize(lights[i].Direction)), 0.0f);
+				float angleFromCenter = max(dot(l, normalize(lights[i].Direction)), 0.0f);
 				if (angleFromCenter < lights[i].SpotFalloff)
 					intensity = 0.0;
 				spotAmount = 1.0 - (1.0 - angleFromCenter) * 1.0 / (1.0 - lights[i].SpotFalloff);
@@ -261,9 +261,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 				(pixelDepth > 0))
 			{
 				// Use the SampleCmpLevelZero Texture2D method (or SampleCmp) to sample from 
-				// the shadow map, just as you would with Direct3D feature level 10_0 and
-				// higher.  Feature level 9_1 only supports LessOrEqual, which returns 0 if
-				// the pixel is in the shadow.
+				// the shadow map.
 				lighting = float(shadowMap.SampleCmpLevelZero(
 					shadowSampler,
 					shadowTexCoords,
