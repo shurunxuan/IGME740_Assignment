@@ -199,7 +199,7 @@ void Light::CalculateDirectionalFrustumMatrices()
 	const DirectX::XMVECTOR eyePosition = DirectX::XMVectorSubtract(cameraPos, DirectX::XMVectorScale(eyeDirection, 100.0f));
 	const DirectX::XMFLOAT3 up{ 0.0f, 1.0f, 0.0f };
 	const DirectX::XMVECTOR upDirection = DirectX::XMLoadFloat3(&up);
-	view = DirectX::XMMatrixTranspose(DirectX::XMMatrixLookToLH(cameraPos, eyeDirection, upDirection));
+	view = DirectX::XMMatrixTranspose(DirectX::XMMatrixLookToLH(eyePosition, eyeDirection, upDirection));
 
 
 	DirectX::XMMATRIX matViewCameraProjection = DirectX::XMMatrixTranspose(camera->GetProjectionMatrix());
@@ -274,8 +274,8 @@ void Light::CalculateDirectionalFrustumMatrices()
 		// This code removes the shimmering effect along the edges of shadows due to
 		// the light changing to fit the camera.
 
-			// We calculate a looser bound based on the size of the PCF blur.  This ensures us that we're 
-			// sampling within the correct map.
+		// We calculate a looser bound based on the size of the PCF blur.  This ensures us that we're 
+		// sampling within the correct map.
 		float scaleDueToBlurAMT = (float(3 * 2 + 1)
 			/ float(shadowMapDimension));
 		DirectX::XMVECTORF32 scaleDueToBlurAMTVec = { scaleDueToBlurAMT, scaleDueToBlurAMT, 0.0f, 0.0f };

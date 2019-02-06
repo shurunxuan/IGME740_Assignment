@@ -218,8 +218,6 @@ void Game::Init()
 		entities[entityCount - 1]->GetMeshAt(k)->SetMaterial(brdfMaterial);
 	}
 
-
-
 	// Get the AABB bounding box of the scene
 	XMVECTOR vMeshMin;
 	XMVECTOR vMeshMax;
@@ -231,23 +229,44 @@ void Game::Init()
 		for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 		{
 			auto msh = entities[i]->GetMeshAt(j);
-			vMeshMin = XMVectorSet(msh->BoundingBoxCenter.x - msh->BoundingBoxExtents.x,
-				msh->BoundingBoxCenter.y - msh->BoundingBoxExtents.y,
-				msh->BoundingBoxCenter.z - msh->BoundingBoxExtents.z,
+			XMFLOAT3 bbCenter = msh->BoundingBoxCenter;
+			XMFLOAT3 bbExtent = msh->BoundingBoxExtents;
+			XMVECTOR cen = XMLoadFloat3(&bbCenter);
+			XMVECTOR ext = XMLoadFloat3(&bbExtent);
+			XMVECTOR min = cen - ext;
+			XMVECTOR max = cen + ext;
+
+
+			XMFLOAT4X4 worldMat = entities[i]->GetWorldMatrix();
+			XMMATRIX mat = XMLoadFloat4x4(&worldMat);
+			mat = XMMatrixTranspose(mat);
+
+			BoundingBox bb;
+			BoundingBox::CreateFromPoints(bb, min, max);
+			bb.Transform(bb, mat);
+
+			vMeshMin = XMVectorSet(bb.Center.x - bb.Extents.x,
+				bb.Center.y - bb.Extents.y,
+				bb.Center.z - bb.Extents.z,
 				1.0f);
 
-			vMeshMax = XMVectorSet(msh->BoundingBoxCenter.x + msh->BoundingBoxExtents.x,
-				msh->BoundingBoxCenter.y + msh->BoundingBoxExtents.y,
-				msh->BoundingBoxCenter.z + msh->BoundingBoxExtents.z,
+			vMeshMax = XMVectorSet(bb.Center.x + bb.Extents.x,
+				bb.Center.y + bb.Extents.y,
+				bb.Center.z + bb.Extents.z,
 				1.0f);
-
-			vMeshMin = XMVector4Transform(vMeshMin, XMLoadFloat4x4(&entities[i]->GetWorldMatrix()));
-			vMeshMax = XMVector4Transform(vMeshMax, XMLoadFloat4x4(&entities[i]->GetWorldMatrix()));
 
 			sceneAABBMin = XMVectorMin(vMeshMin, sceneAABBMin);
 			sceneAABBMax = XMVectorMax(vMeshMax, sceneAABBMax);
 		}
 	}
+
+	XMFLOAT4 aabbMin{};
+	XMFLOAT4 aabbMax{};
+	DirectX::XMStoreFloat4(&aabbMin, sceneAABBMin);
+	DirectX::XMStoreFloat4(&aabbMax, sceneAABBMax);
+
+	LOG_DEBUG << "AABB MIN: x = " << aabbMin.x << ", y = " << aabbMin.y << ", z = " << aabbMin.z << ", w = " << aabbMin.w << std::endl;
+	LOG_DEBUG << "AABB MAX: x = " << aabbMax.x << ", y = " << aabbMax.y << ", z = " << aabbMax.z << ", w = " << aabbMax.w << std::endl;
 
 	skyboxCount = 3;
 	skyboxes = new Skybox * [skyboxCount];
@@ -407,7 +426,7 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
 		XMVECTOR yVec = XMLoadFloat3(&yAxis);
-		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime / 3.0f);
 		XMVECTOR lightDirection = XMLoadFloat3(&lightData[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMFLOAT3 newLightDirection{};
@@ -739,7 +758,7 @@ void Game::Draw(float deltaTime, float totalTime)
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", 0.150f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fTexelSize", 1.0f / 2048.0f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fNativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0.002f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0.0005f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
 
 				XMMATRIX matTextureScale = XMMatrixScaling(0.5f, -0.5f, 1.0f);
@@ -989,13 +1008,11 @@ void Game::OnMouseWheel(float wheelDelta, int x, int y)
 	for (int i = 0; i < entityCount; ++i)
 	{
 		XMFLOAT3 objTranslation = entities[i]->GetTranslation();
-		const float zTemp = objTranslation.z;
 		XMFLOAT3 objScale = entities[i]->GetScale();
 
 		XMVECTOR vec = XMLoadFloat3(&objTranslation);
 		vec = XMVectorScale(vec, scale);
 		XMStoreFloat3(&objTranslation, vec);
-		objTranslation.z = zTemp;
 
 		vec = XMLoadFloat3(&objScale);
 		vec = XMVectorScale(vec, scale);
