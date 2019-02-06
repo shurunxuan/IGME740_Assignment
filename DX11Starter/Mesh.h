@@ -24,6 +24,10 @@ public:
 
 	static std::pair<std::vector<std::shared_ptr<Mesh>>, std::vector<std::shared_ptr<BlinnPhongMaterial>>> LoadFromFile(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* context);
 
+	// Bounding Box
+	DirectX::XMFLOAT3 BoundingBoxCenter;
+	DirectX::XMFLOAT3 BoundingBoxExtents;
+
 private:
 	// Buffers to hold actual geometry data
 	ID3D11Buffer* vertexBuffer;

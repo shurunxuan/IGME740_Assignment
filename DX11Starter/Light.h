@@ -1,6 +1,7 @@
 #pragma once
 #include <DirectXMath.h>
 #include <WICTextureLoader.h>
+#include "FirstPersonCamera.h"
 
 #define LIGHT_TYPE_DIR 0
 #define LIGHT_TYPE_POINT 1
@@ -21,7 +22,7 @@ struct LightStructure
 class Light
 {
 public:
-	Light(LightStructure* data, ID3D11Device* d, ID3D11DeviceContext* c);
+	Light(LightStructure* data, ID3D11Device* d, ID3D11DeviceContext* c, FirstPersonCamera* cam, DirectX::XMVECTOR aabbMin, DirectX::XMVECTOR aabbMax);
 	~Light();
 
 
@@ -29,20 +30,23 @@ public:
 	ID3D11DepthStencilView* GetShadowDepthView() const;
 	ID3D11ShaderResourceView* GetShadowResourceView() const;
 
-	D3D11_VIEWPORT* GetShadowViewport() const;
+	D3D11_VIEWPORT* GetShadowViewportAt(int cascade) const;
 
-	DirectX::XMMATRIX GetViewMatrix();
-	DirectX::XMMATRIX GetProjectionMatrix();
+	DirectX::XMMATRIX GetViewMatrix() const;
+	int GetCascadeCount() const;
+	DirectX::XMMATRIX GetProjectionMatrixAt(int index) const;
 
 	const LightStructure* GetData() const;
 
-	void SetDirection(DirectX::XMFLOAT3 d);
-	void SetPosition(DirectX::XMFLOAT3 p);
+	void SetDirection(DirectX::XMFLOAT3 d) const;
+	void SetPosition(DirectX::XMFLOAT3 p) const;
 	void SetColor(DirectX::XMFLOAT3 c) const;
 	void SetAmbientColor(DirectX::XMFLOAT3 a) const;
-	void SetRange(float r);
+	void SetRange(float r) const;
 	void SetIntensity(float i) const;
-	void SetSpotFallOff(float s);
+	void SetSpotFallOff(float s) const;
+
+	void UpdateMatrices();
 private:
 	UINT shadowMapDimension;
 
@@ -53,16 +57,31 @@ private:
 	ID3D11DepthStencilView* shadowDepthView;
 	ID3D11ShaderResourceView* shadowResourceView;
 
-	D3D11_VIEWPORT* shadowViewport;
+	D3D11_VIEWPORT* shadowViewport[3];
+
+	FirstPersonCamera* camera;
 
 	DirectX::XMMATRIX view;
-	DirectX::XMMATRIX projection;
-
-	bool shouldUpdateMatrices;
+	DirectX::XMMATRIX projection[3];
 
 	LightStructure* Data;
 
-	void UpdateMatrices();
+	// Bounding box
+	DirectX::XMVECTOR sceneAABBMin;
+	DirectX::XMVECTOR sceneAABBMax;
+
+	// Shadow map cascades
+	int m_iCascadePartitionsMax = 100;
+	float m_fCascadePartitionsFrustum[3]; // Values are  between near and far
+	int m_iCascadePartitionsZeroToOne[3]; // Values are 0 to 100 and represent a percent of the frustum
+
+	void CalculateDirectionalFrustumMatrices();
+	void CreateFrustumPointsFromCascadeInterval(float fCascadeIntervalBegin,
+		float fCascadeIntervalEnd,
+		const DirectX::XMMATRIX& vProjection,
+		DirectX::XMVECTOR* pvCornerPointsWorld
+	) const;
+
 };
 
 LightStructure DirectionalLight(DirectX::XMFLOAT3 color, DirectX::XMFLOAT3 direction, float intensity, DirectX::XMFLOAT3 ambientColor);

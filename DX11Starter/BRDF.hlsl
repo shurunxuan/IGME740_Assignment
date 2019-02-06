@@ -13,7 +13,7 @@ struct VertexToPixel
 	float3 normal				: NORMAL;
 	float2 uv					: TEXCOORD;
 	float3 tangent				: TANGENT;
-	float4 lSpacePos			: POSITION1;
+	float4 lViewSpacePos		: POSITION1;
 };
 
 struct Light
@@ -56,6 +56,29 @@ cbuffer cameraData : register(b2)
 	float4x4 SkyboxRotation;
 };
 
+cbuffer shadowData : register(b3)
+{
+	//float4x4        cascadeProjection;
+	float4          m_vCascadeOffset[3];
+	float4          m_vCascadeScale[3];
+	int             m_nCascadeLevels; // Number of Cascades
+	int             m_iVisualizeCascades; // 1 is to visualize the cascades in different colors. 0 is to just draw the scene
+	int             m_iPCFBlurForLoopStart; // For loop begin value. For a 5x5 Kernal this would be -2.
+	int             m_iPCFBlurForLoopEnd; // For loop end value. For a 5x5 kernel this would be 3.
+
+	// For Map based selection scheme, this keeps the pixels inside of the the valid range.
+	// When there is no border, these values are 0 and 1 respectivley.
+	float           m_fMinBorderPadding;
+	float           m_fMaxBorderPadding;
+	float           m_fShadowBiasFromGUI;  // A shadow map offset to deal with self shadow artifacts.  
+										   //These artifacts are aggravated by PCF.
+	float           m_fShadowPartitionSize;
+	float           m_fCascadeBlendArea; // Amount to overlap when blending between cascades.
+	float           m_fTexelSize;
+	float           m_fNativeTexelSizeInX;
+	float           m_fPaddingForCB3; // Padding variables exist because CBs must be a multiple of 16 bytes.
+}
+
 Texture2D diffuseTexture  : register(t0);
 Texture2D normalTexture  : register(t1);
 TextureCube cubemap : register(t2);
@@ -63,6 +86,18 @@ TextureCube irradianceMap : register(t3);
 Texture2D shadowMap : register(t4);
 SamplerState basicSampler : register(s0);
 SamplerComparisonState shadowSampler : register(s1);
+
+static const float4 vCascadeColorsMultiplier[8] =
+{
+	float4 (1.5f, 0.0f, 0.0f, 1.0f),
+	float4 (0.0f, 1.5f, 0.0f, 1.0f),
+	float4 (0.0f, 0.0f, 5.5f, 1.0f),
+	float4 (1.5f, 0.0f, 5.5f, 1.0f),
+	float4 (1.5f, 1.5f, 0.0f, 1.0f),
+	float4 (1.0f, 1.0f, 1.0f, 1.0f),
+	float4 (0.0f, 1.0f, 5.5f, 1.0f),
+	float4 (0.5f, 3.5f, 0.75f, 1.0f)
+};
 
 // https://www.knaldtech.com/docs/doku.php?id=specular_lys
 static const int nMipOffset = 0;
@@ -151,14 +186,125 @@ float3 GGX(float3 n, float3 l, float3 v)
 
 	float3 F = reflectivity + (float3(1.0, 1.0, 1.0) - reflectivity) * pow(1 - LdH, 5);
 
-	//float k = rough2 * 0.5f;
-	//float G_SmithL = NdL / (NdL * (1.0f - k) + k);
-	//float G_SmithV = NdV / (NdV * (1.0f - k) + k);
-	//float G = (G_SmithL * G_SmithV);
-
 	float G = min(1, min(2 * NdH * NdV / VdH, 2 * NdH * NdL / VdH));
 
 	return G * D * F;
+}
+
+//--------------------------------------------------------------------------------------
+// Calculate amount to blend between two cascades and the band where blending will occure.
+//--------------------------------------------------------------------------------------
+void CalculateBlendAmountForMap(in float4 vShadowMapTextureCoord,
+	in out float fCurrentPixelsBlendBandLocation,
+	out float fBlendBetweenCascadesAmount)
+{
+	// Calcaulte the blend band for the map based selection.
+	float2 distanceToOne = float2 (1.0f - vShadowMapTextureCoord.x, 1.0f - vShadowMapTextureCoord.y);
+	fCurrentPixelsBlendBandLocation = min(vShadowMapTextureCoord.x, vShadowMapTextureCoord.y);
+	float fCurrentPixelsBlendBandLocation2 = min(distanceToOne.x, distanceToOne.y);
+	fCurrentPixelsBlendBandLocation =
+		min(fCurrentPixelsBlendBandLocation, fCurrentPixelsBlendBandLocation2);
+	fBlendBetweenCascadesAmount = fCurrentPixelsBlendBandLocation / m_fCascadeBlendArea;
+}
+
+void ComputeCoordinatesTransform(in int iCascadeIndex,
+	in float4 InterpolatedPosition,
+	in out float4 vShadowTexCoord,
+	in out float4 vShadowTexCoordViewSpace)
+{
+	// Now that we know the correct map, we can transform the world space position of the current fragment                
+	vShadowTexCoord = vShadowTexCoordViewSpace * m_vCascadeScale[iCascadeIndex];
+	vShadowTexCoord += m_vCascadeOffset[iCascadeIndex];
+
+	vShadowTexCoord.x *= m_fShadowPartitionSize;  // precomputed (float)iCascadeIndex / (float)CASCADE_CNT
+	vShadowTexCoord.x += (m_fShadowPartitionSize * (float)iCascadeIndex);
+
+
+}
+
+//--------------------------------------------------------------------------------------
+// This function calculates the screen space depth for shadow space texels
+//--------------------------------------------------------------------------------------
+void CalculateRightAndUpTexelDepthDeltas(in float3 vShadowTexDDX,
+	in float3 vShadowTexDDY,
+	out float fUpTextDepthWeight,
+	out float fRightTextDepthWeight
+) {
+
+	// We use the derivatives in X and Y to create a transformation matrix.  Because these derivives give us the 
+	// transformation from screen space to shadow space, we need the inverse matrix to take us from shadow space 
+	// to screen space.  This new matrix will allow us to map shadow map texels to screen space.  This will allow 
+	// us to find the screen space depth of a corresponding depth pixel.
+	// This is not a perfect solution as it assumes the underlying geometry of the scene is a plane.  A more 
+	// accureate way of finding the actual depth would be to do a deferred rendering approach and actually 
+	//sample the depth.
+
+	// Using an offset, or using variance shadow maps is a better approach to reducing these artifacts in most cases.
+
+	float2x2 matScreentoShadow = float2x2(vShadowTexDDX.xy, vShadowTexDDY.xy);
+	float fDeterminant = determinant(matScreentoShadow);
+
+	float fInvDeterminant = 1.0f / fDeterminant;
+
+	float2x2 matShadowToScreen = float2x2 (
+		matScreentoShadow._22 * fInvDeterminant, matScreentoShadow._12 * -fInvDeterminant,
+		matScreentoShadow._21 * -fInvDeterminant, matScreentoShadow._11 * fInvDeterminant);
+
+	float2 vRightShadowTexelLocation = float2(m_fTexelSize, 0.0f);
+	float2 vUpShadowTexelLocation = float2(0.0f, m_fTexelSize);
+
+	// Transform the right pixel by the shadow space to screen space matrix.
+	float2 vRightTexelDepthRatio = mul(vRightShadowTexelLocation, matShadowToScreen);
+	float2 vUpTexelDepthRatio = mul(vUpShadowTexelLocation, matShadowToScreen);
+
+	// We can now caculate how much depth changes when you move up or right in the shadow map.
+	// We use the ratio of change in x and y times the dervivite in X and Y of the screen space 
+	// depth to calculate this change.
+	fUpTextDepthWeight =
+		vUpTexelDepthRatio.x * vShadowTexDDX.z
+		+ vUpTexelDepthRatio.y * vShadowTexDDY.z;
+	fRightTextDepthWeight =
+		vRightTexelDepthRatio.x * vShadowTexDDX.z
+		+ vRightTexelDepthRatio.y * vShadowTexDDY.z;
+
+}
+
+//--------------------------------------------------------------------------------------
+// Use PCF to sample the depth map and return a percent lit value.
+//--------------------------------------------------------------------------------------
+void CalculatePCFPercentLit(in float4 vShadowTexCoord,
+	in float fRightTexelDepthDelta,
+	in float fUpTexelDepthDelta,
+	in float fBlurRowSize,
+	out float fPercentLit
+)
+{
+	fPercentLit = 0.0f;
+	// This loop could be unrolled, and texture immediate offsets could be used if the kernel size were fixed.
+	// This would be performance improvment.
+	for (int x = m_iPCFBlurForLoopStart; x < m_iPCFBlurForLoopEnd; ++x)
+	{
+		for (int y = m_iPCFBlurForLoopStart; y < m_iPCFBlurForLoopEnd; ++y)
+		{
+			float depthcompare = vShadowTexCoord.z;
+			// A very simple solution to the depth bias problems of PCF is to use an offset.
+			// Unfortunately, too much offset can lead to Peter-panning (shadows near the base of object disappear )
+			// Too little offset can lead to shadow acne ( objects that should not be in shadow are partially self shadowed ).
+			depthcompare -= m_fShadowBiasFromGUI;
+
+			// Add in derivative computed depth scale based on the x and y pixel.
+			depthcompare += fRightTexelDepthDelta * ((float)x) + fUpTexelDepthDelta * ((float)y);
+
+			// Compare the transformed pixel depth to the depth read from the map.
+			fPercentLit += shadowMap.SampleCmpLevelZero(shadowSampler,
+				float2(
+					vShadowTexCoord.x + (((float)x) * m_fNativeTexelSizeInX),
+					vShadowTexCoord.y + (((float)y) * m_fTexelSize)
+					),
+				depthcompare);
+		}
+	}
+	fPercentLit /= (float)fBlurRowSize;
 }
 
 float4 main(VertexToPixel input) : SV_TARGET
@@ -246,27 +392,143 @@ float4 main(VertexToPixel input) : SV_TARGET
 		float NdV = saturate(dot(n, v));
 
 		float lighting = 1;
-
+		float4 vVisualizeCascadeColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
 		if (i == 0)
 		{
-			float2 shadowTexCoords;
-			shadowTexCoords.x = 0.5f + (input.lSpacePos.x / input.lSpacePos.w * 0.5f);
-			shadowTexCoords.y = 0.5f - (input.lSpacePos.y / input.lSpacePos.w * 0.5f);
-			float pixelDepth = input.lSpacePos.z / input.lSpacePos.w;
+			// Only cast shadow for light 0
+			//float2 shadowTexCoords;
+			//float4 lSpacePos = mul(input.lViewSpacePos, cascadeProjection);
+			//shadowTexCoords.x = 0.5f + (lSpacePos.x / lSpacePos.w * 0.5f);
+			//shadowTexCoords.y = 0.5f - (lSpacePos.y / lSpacePos.w * 0.5f);
+			//float pixelDepth = lSpacePos.z / lSpacePos.w;
 
-			// Check if the pixel texture coordinate is in the view frustum of the 
-			// light before doing any shadow work.
-			if ((saturate(shadowTexCoords.x) == shadowTexCoords.x) &&
-				(saturate(shadowTexCoords.y) == shadowTexCoords.y) &&
-				(pixelDepth > 0))
+			//// Check if the pixel texture coordinate is in the view frustum of the 
+			//// light before doing any shadow work.
+			//if ((saturate(shadowTexCoords.x) == shadowTexCoords.x) &&
+			//	(saturate(shadowTexCoords.y) == shadowTexCoords.y) &&
+			//	(pixelDepth > 0))
+			//{
+			//	// Use the SampleCmpLevelZero Texture2D method (or SampleCmp) to sample from 
+			//	// the shadow map.
+			//	lighting = float(shadowMap.SampleCmpLevelZero(
+			//		shadowSampler,
+			//		shadowTexCoords,
+			//		pixelDepth));
+			//}
+
+
+
+
+
+
+			float4 vShadowMapTextureCoord = 0.0f;
+			float4 vShadowMapTextureCoord_blend = 0.0f;
+
+
+
+			float fPercentLit = 0.0f;
+			float fPercentLit_blend = 0.0f;
+
+
+			float fUpTextDepthWeight = 0;
+			float fRightTextDepthWeight = 0;
+			float fUpTextDepthWeight_blend = 0;
+			float fRightTextDepthWeight_blend = 0;
+
+			int iBlurRowSize = m_iPCFBlurForLoopEnd - m_iPCFBlurForLoopStart;
+			iBlurRowSize *= iBlurRowSize;
+			float fBlurRowSize = (float)iBlurRowSize;
+
+			int iCascadeFound = 0;
+			int iNextCascadeIndex = 1;
+
+			float fCurrentPixelDepth;
+
+			int iCurrentCascadeIndex;
+
+			float4 vShadowMapTextureCoordViewSpace = input.lViewSpacePos;
+
+			iCurrentCascadeIndex = 0;
+
+			for (int iCascadeIndex = 0; iCascadeIndex < m_nCascadeLevels && iCascadeFound == 0; ++iCascadeIndex)
 			{
-				// Use the SampleCmpLevelZero Texture2D method (or SampleCmp) to sample from 
-				// the shadow map.
-				lighting = float(shadowMap.SampleCmpLevelZero(
-					shadowSampler,
-					shadowTexCoords,
-					pixelDepth));
+				vShadowMapTextureCoord = vShadowMapTextureCoordViewSpace * m_vCascadeScale[iCascadeIndex];
+				vShadowMapTextureCoord += m_vCascadeOffset[iCascadeIndex];
+
+				if (min(vShadowMapTextureCoord.x, vShadowMapTextureCoord.y) > m_fMinBorderPadding
+					&& max(vShadowMapTextureCoord.x, vShadowMapTextureCoord.y) < m_fMaxBorderPadding)
+				{
+					iCurrentCascadeIndex = iCascadeIndex;
+					iCascadeFound = 1;
+				}
 			}
+
+			float4 color = 0;
+
+			// Repeat text coord calculations for the next cascade. 
+			// The next cascade index is used for blurring between maps.
+			iNextCascadeIndex = min(m_nCascadeLevels - 1, iCurrentCascadeIndex + 1);
+
+			float fBlendBetweenCascadesAmount = 1.0f;
+			float fCurrentPixelsBlendBandLocation = 1.0f;
+
+			CalculateBlendAmountForMap(vShadowMapTextureCoord,
+				fCurrentPixelsBlendBandLocation, fBlendBetweenCascadesAmount);
+
+			float3 vShadowMapTextureCoordDDX;
+			float3 vShadowMapTextureCoordDDY;
+			// The derivatives are used to find the slope of the current plane.
+			// The derivative calculation has to be inside of the loop in order to prevent divergent flow control artifacts.
+			vShadowMapTextureCoordDDX = ddx(vShadowMapTextureCoordViewSpace);
+			vShadowMapTextureCoordDDY = ddy(vShadowMapTextureCoordViewSpace);
+
+			vShadowMapTextureCoordDDX *= m_vCascadeScale[iCurrentCascadeIndex];
+			vShadowMapTextureCoordDDY *= m_vCascadeScale[iCurrentCascadeIndex];
+
+
+			ComputeCoordinatesTransform(iCurrentCascadeIndex,
+				input.worldPos,
+				vShadowMapTextureCoord,
+				vShadowMapTextureCoordViewSpace);
+
+
+			vVisualizeCascadeColor = vCascadeColorsMultiplier[iCurrentCascadeIndex];
+
+			CalculateRightAndUpTexelDepthDeltas(vShadowMapTextureCoordDDX, vShadowMapTextureCoordDDY,
+				fUpTextDepthWeight, fRightTextDepthWeight);
+
+			CalculatePCFPercentLit(vShadowMapTextureCoord, fRightTextDepthWeight,
+				fUpTextDepthWeight, fBlurRowSize, fPercentLit);
+
+			if (fCurrentPixelsBlendBandLocation < m_fCascadeBlendArea)
+			{  // the current pixel is within the blend band.
+
+				// Repeat text coord calculations for the next cascade. 
+				// The next cascade index is used for blurring between maps.
+				vShadowMapTextureCoord_blend = vShadowMapTextureCoordViewSpace * m_vCascadeScale[iNextCascadeIndex];
+				vShadowMapTextureCoord_blend += m_vCascadeOffset[iNextCascadeIndex];
+
+				ComputeCoordinatesTransform(iNextCascadeIndex, input.worldPos,
+					vShadowMapTextureCoord_blend,
+					vShadowMapTextureCoordViewSpace);
+
+				// We repeat the calcuation for the next cascade layer, when blending between maps.
+				if (fCurrentPixelsBlendBandLocation < m_fCascadeBlendArea)
+				{  
+					// the current pixel is within the blend band.
+					CalculateRightAndUpTexelDepthDeltas(vShadowMapTextureCoordDDX,
+						vShadowMapTextureCoordDDY,
+						fUpTextDepthWeight_blend,
+						fRightTextDepthWeight_blend);
+
+					CalculatePCFPercentLit(vShadowMapTextureCoord_blend, fRightTextDepthWeight_blend,
+						fUpTextDepthWeight_blend, fBlurRowSize, fPercentLit_blend);
+					fPercentLit = lerp(fPercentLit_blend, fPercentLit, fBlendBetweenCascadesAmount);
+					// Blend the two calculated shadows by the blend amount.
+				}
+			}
+			lighting = fPercentLit;
+			if (!m_iVisualizeCascades) vVisualizeCascadeColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 		}
 
 		float4 lightColor = float4(lights[i].Color.xyz, 0.0);
@@ -277,7 +539,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 		specular += specularColor;
 
-		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness);
+		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness) * vVisualizeCascadeColor;
 		diffuse += float4(diffuseColor, 0.0) * lightColor * intensity;
 
 	}

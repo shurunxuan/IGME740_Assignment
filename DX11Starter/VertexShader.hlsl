@@ -13,7 +13,6 @@ cbuffer externalData : register(b0)
 	matrix projection;
 
 	matrix lView;
-	matrix lProjection;
 
 	int lightCount;
 };
@@ -53,7 +52,7 @@ struct VertexToPixel
 	float3 normal				: NORMAL;
 	float2 uv					: TEXCOORD;
 	float3 tangent				: TANGENT;
-	float4 lSpacePos			: POSITION1;
+	float4 lViewSpacePos		: POSITION1;
 };
 
 // --------------------------------------------------------
@@ -76,7 +75,7 @@ VertexToPixel main( VertexShaderInput input )
 	// First we multiply them together to get a single matrix which represents
 	// all of those transformations (world to view to projection space)
 	matrix worldViewProj = mul(mul(world, view), projection);
-	matrix lWorldViewProj = mul(mul(world, lView), lProjection);
+	matrix lWorldView = mul(world, lView);
 	// Then we convert our 3-component position vector to a 4-component vector
 	// and multiply it by our final 4x4 matrix.
 	//
@@ -85,7 +84,7 @@ VertexToPixel main( VertexShaderInput input )
 	output.position = mul(float4(input.position, 1.0f), worldViewProj);
 	output.worldPos = mul(float4(input.position, 1.0f), world);
 
-	output.lSpacePos = mul(float4(input.position, 1.0f), lWorldViewProj);
+	output.lViewSpacePos = mul(float4(input.position, 1.0f), lWorldView);
 
 	// Update the normal
 	output.normal = mul(input.normal, (float3x3)itworld);

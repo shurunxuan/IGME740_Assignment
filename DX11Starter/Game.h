@@ -7,6 +7,7 @@
 #include "Light.h"
 #include <fstream>
 #include "Skybox.h"
+#include <DirectXCollision.h>
 
 class Game 
 	: public DXCore
@@ -29,11 +30,6 @@ public:
 	void OnMouseMove (WPARAM buttonState, int x, int y);
 	void OnMouseWheel(float wheelDelta,   int x, int y);
 private:
-
-	// Initialization helper methods - feel free to customize, combine, etc.
-	void LoadShaders(); 
-	void CreateMatrices();
-	void CreateBasicGeometry();
 
 	// Buffers to hold actual geometry data
 	ID3D11Buffer* vertexBuffer;
@@ -60,6 +56,10 @@ private:
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
+
+	// Bounding box
+	DirectX::XMVECTOR sceneAABBMin;
+	DirectX::XMVECTOR sceneAABBMax;
 
 	// Skybox
 	int skyboxCount;

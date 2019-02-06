@@ -12,7 +12,7 @@ struct VertexToPixel
 	float3 normal				: NORMAL;
 	float2 uv					: TEXCOORD;
 	float3 tangent				: TANGENT;
-	float4 lSpacePos			: POSITION1;
+	float4 lViewSpacePos		: POSITION1;
 };
 
 struct Light
