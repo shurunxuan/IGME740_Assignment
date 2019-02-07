@@ -14,9 +14,9 @@ Light::Light(LightStructure* data, ID3D11Device* d, ID3D11DeviceContext* c, Firs
 	sceneAABBMin = aabbMin;
 	sceneAABBMax = aabbMax;
 
-	m_iCascadePartitionsZeroToOne[0] = 5;
-	m_iCascadePartitionsZeroToOne[1] = 15;
-	m_iCascadePartitionsZeroToOne[2] = 60;
+	m_iCascadePartitionsZeroToOne[0] = 2;
+	m_iCascadePartitionsZeroToOne[1] = 6;
+	m_iCascadePartitionsZeroToOne[2] = 24;
 
 	shadowMap = nullptr;
 	shadowDepthView = nullptr;
@@ -236,8 +236,8 @@ void Light::CalculateDirectionalFrustumMatrices()
 		// Calculate the interval of the View Frustum that this cascade covers. We measure the interval 
 		// the cascade covers as a Min and Max distance along the Z Axis.
 
-			// Because we want to fit the orthogrpahic projection tightly around the Cascade, we set the Mimiumum cascade 
-			// value to the previous Frustum end Interval
+		// Because we want to fit the orthogrpahic projection tightly around the Cascade, we set the Mimiumum cascade 
+		// value to the previous Frustum end Interval
 		if (iCascadeIndex == 0) fFrustumIntervalBegin = 0.0f;
 		else fFrustumIntervalBegin = float(m_iCascadePartitionsZeroToOne[iCascadeIndex - 1]);
 

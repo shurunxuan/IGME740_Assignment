@@ -34,11 +34,9 @@ Game::Game(HINSTANCE hInstance)
 	vertexBuffer = 0;
 	indexBuffer = 0;
 
-#if defined(DEBUG) || defined(_DEBUG)
 	// Do we want a console window?  Probably only in debug mode
 	CreateConsoleWindow(500, 120, 32, 120);
 	printf("Console window created successfully.  Feel free to printf() here.\n");
-#endif
 }
 
 // --------------------------------------------------------
@@ -207,14 +205,14 @@ void Game::Init()
 			resource->Release();
 			brdfMaterial->InitializeSampler();
 		}
-		if (originalMaterial->normalSrvPtr)
-		{
-			originalMaterial->normalSrvPtr->GetResource(&resource);
-			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
-			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
-			resource->Release();
-			brdfMaterial->InitializeSampler();
-		}
+		//if (originalMaterial->normalSrvPtr)
+		//{
+		//	originalMaterial->normalSrvPtr->GetResource(&resource);
+		//	originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
+		//	device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
+		//	resource->Release();
+		//	brdfMaterial->InitializeSampler();
+		//}
 		entities[entityCount - 1]->GetMeshAt(k)->SetMaterial(brdfMaterial);
 	}
 
@@ -387,8 +385,11 @@ void Game::Init()
 
 	D3D11_RASTERIZER_DESC shadowRenderStateDesc;
 	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
-	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
+	shadowRenderStateDesc.CullMode = D3D11_CULL_BACK;
 	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
+	shadowRenderStateDesc.DepthBias = 1000;
+	shadowRenderStateDesc.DepthBiasClamp = 0.0f;
+	shadowRenderStateDesc.SlopeScaledDepthBias = 1.0f;
 	shadowRenderStateDesc.DepthClipEnable = true;
 
 	device->CreateRasterizerState(
@@ -417,6 +418,9 @@ bool turnOnNormalMap = true;
 bool visualizeCascade = false;
 bool rotateSkybox = false;
 bool modelAnimationDir = false;
+
+float cascadeBlendArea = 0.007f;
+
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -541,6 +545,21 @@ void Game::Update(float deltaTime, float totalTime)
 		currentSkybox %= skyboxCount;
 	}
 	const float materialSpeed = 0.5f;
+
+	// Set cascaded shadow map blend area
+	if (GetAsyncKeyState('O') & 0x8000)
+	{
+		cascadeBlendArea -= 0.001f;
+		if (cascadeBlendArea < 0.0f) cascadeBlendArea = 0.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+	if (GetAsyncKeyState('P') & 0x8000)
+	{
+		cascadeBlendArea += 0.001f;
+		if (cascadeBlendArea > 1.0f) cascadeBlendArea = 1.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+
 	// Set Roughness
 	if (GetAsyncKeyState(VK_LEFT) & 0x8000)
 	{
@@ -603,6 +622,7 @@ void Game::Update(float deltaTime, float totalTime)
 // --------------------------------------------------------
 // Clear the screen, redraw everything, present to the user
 // --------------------------------------------------------
+
 void Game::Draw(float deltaTime, float totalTime)
 {
 	const float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -755,10 +775,10 @@ void Game::Draw(float deltaTime, float totalTime)
 
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopStart", 3 / -2);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopEnd", 3 / 2 + 1);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", 0.150f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", cascadeBlendArea);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fTexelSize", 1.0f / 2048.0f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fNativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0.0005f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
 
 				XMMATRIX matTextureScale = XMMatrixScaling(0.5f, -0.5f, 1.0f);

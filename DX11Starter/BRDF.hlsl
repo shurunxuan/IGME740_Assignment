@@ -290,7 +290,7 @@ void CalculatePCFPercentLit(in float4 vShadowTexCoord,
 			// A very simple solution to the depth bias problems of PCF is to use an offset.
 			// Unfortunately, too much offset can lead to Peter-panning (shadows near the base of object disappear )
 			// Too little offset can lead to shadow acne ( objects that should not be in shadow are partially self shadowed ).
-			depthcompare -= m_fShadowBiasFromGUI;
+			//depthcompare -= m_fShadowBiasFromGUI;
 
 			// Add in derivative computed depth scale based on the x and y pixel.
 			depthcompare += fRightTexelDepthDelta * ((float)x) + fUpTexelDepthDelta * ((float)y);
