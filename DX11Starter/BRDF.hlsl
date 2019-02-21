@@ -52,7 +52,7 @@ cbuffer materialData : register(b1)
 
 cbuffer cameraData : register(b2)
 {
-	float3 CameraDirection;
+	float3 CameraPosition;
 	float4x4 SkyboxRotation;
 };
 
@@ -124,10 +124,10 @@ float PerceptualRoughnessFromSpecularPower(float fSpecPower)
 	return PerceptualRoughnessFromRoughness(fRoughness);
 }
 
-float BurleyToMip(float fPerceptualRoughness, int nMips, float NdR)
+float BurleyToMip(float fPerceptualRoughness, int nMips, float NdotR)
 {
 	float fSpecPower = SpecularPowerFromPerceptualRoughness(fPerceptualRoughness);
-	fSpecPower /= (4 * max(NdR, FLT_EPSILON));
+	fSpecPower /= (4 * max(NdotR, FLT_EPSILON));
 	float fScale = PerceptualRoughnessFromSpecularPower(fSpecPower);
 	return fScale * (nMips - 1 - nMipOffset);
 }
@@ -155,6 +155,7 @@ float3 IBL(float3 n, float3 v, float3 l)
 
 	float3 diffuseResult = diffuseImageLighting * material.albedo;
 	float3 result = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel.xyz);
+	//float3 result = specularImageLighting * material.albedo;
 
 	return result;
 }
@@ -290,7 +291,7 @@ void CalculatePCFPercentLit(in float4 vShadowTexCoord,
 			// A very simple solution to the depth bias problems of PCF is to use an offset.
 			// Unfortunately, too much offset can lead to Peter-panning (shadows near the base of object disappear )
 			// Too little offset can lead to shadow acne ( objects that should not be in shadow are partially self shadowed ).
-			depthcompare -= m_fShadowBiasFromGUI;
+			//depthcompare -= m_fShadowBiasFromGUI;
 
 			// Add in derivative computed depth scale based on the x and y pixel.
 			depthcompare += fRightTexelDepthDelta * ((float)x) + fUpTexelDepthDelta * ((float)y);
@@ -309,7 +310,7 @@ void CalculatePCFPercentLit(in float4 vShadowTexCoord,
 
 float4 main(VertexToPixel input) : SV_TARGET
 {
-	float3 v = normalize(-CameraDirection);
+	float3 v = normalize(float4(CameraPosition, 1.0f) - input.worldPos);
 	float3 n = normalize(input.normal);
 	float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
 	float3 b = normalize(cross(n, t));
@@ -479,11 +480,11 @@ float4 main(VertexToPixel input) : SV_TARGET
 			float3 vShadowMapTextureCoordDDY;
 			// The derivatives are used to find the slope of the current plane.
 			// The derivative calculation has to be inside of the loop in order to prevent divergent flow control artifacts.
-			vShadowMapTextureCoordDDX = ddx(vShadowMapTextureCoordViewSpace);
-			vShadowMapTextureCoordDDY = ddy(vShadowMapTextureCoordViewSpace);
+			vShadowMapTextureCoordDDX = ddx(vShadowMapTextureCoordViewSpace).xyz;
+			vShadowMapTextureCoordDDY = ddy(vShadowMapTextureCoordViewSpace).xyz;
 
-			vShadowMapTextureCoordDDX *= m_vCascadeScale[iCurrentCascadeIndex];
-			vShadowMapTextureCoordDDY *= m_vCascadeScale[iCurrentCascadeIndex];
+			vShadowMapTextureCoordDDX *= m_vCascadeScale[iCurrentCascadeIndex].xyz;
+			vShadowMapTextureCoordDDY *= m_vCascadeScale[iCurrentCascadeIndex].xyz;
 
 
 			ComputeCoordinatesTransform(iCurrentCascadeIndex,
@@ -539,7 +540,7 @@ float4 main(VertexToPixel input) : SV_TARGET
 
 		specular += specularColor;
 
-		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness) * vVisualizeCascadeColor;
+		float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness) * vVisualizeCascadeColor.xyz;
 		diffuse += float4(diffuseColor, 0.0) * lightColor * intensity;
 
 	}
@@ -548,5 +549,5 @@ float4 main(VertexToPixel input) : SV_TARGET
 	result.w = surfaceColor.w;
 	result = saturate(result);
 	return result;
-	//return float4(lighting, lighting, lighting, 1.0);
+	//return float4(v, 1.0);
 }

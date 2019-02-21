@@ -14,9 +14,9 @@ Light::Light(LightStructure* data, ID3D11Device* d, ID3D11DeviceContext* c, Firs
 	sceneAABBMin = aabbMin;
 	sceneAABBMax = aabbMax;
 
-	m_iCascadePartitionsZeroToOne[0] = 5;
-	m_iCascadePartitionsZeroToOne[1] = 15;
-	m_iCascadePartitionsZeroToOne[2] = 60;
+	m_iCascadePartitionsZeroToOne[0] = 3;
+	m_iCascadePartitionsZeroToOne[1] = 6;
+	m_iCascadePartitionsZeroToOne[2] = 15;
 
 	shadowMap = nullptr;
 	shadowDepthView = nullptr;
@@ -199,7 +199,7 @@ void Light::CalculateDirectionalFrustumMatrices()
 	const DirectX::XMVECTOR eyePosition = DirectX::XMVectorSubtract(cameraPos, DirectX::XMVectorScale(eyeDirection, 100.0f));
 	const DirectX::XMFLOAT3 up{ 0.0f, 1.0f, 0.0f };
 	const DirectX::XMVECTOR upDirection = DirectX::XMLoadFloat3(&up);
-	view = DirectX::XMMatrixTranspose(DirectX::XMMatrixLookToLH(cameraPos, eyeDirection, upDirection));
+	view = DirectX::XMMatrixTranspose(DirectX::XMMatrixLookToLH(eyePosition, eyeDirection, upDirection));
 
 
 	DirectX::XMMATRIX matViewCameraProjection = DirectX::XMMatrixTranspose(camera->GetProjectionMatrix());
@@ -236,8 +236,8 @@ void Light::CalculateDirectionalFrustumMatrices()
 		// Calculate the interval of the View Frustum that this cascade covers. We measure the interval 
 		// the cascade covers as a Min and Max distance along the Z Axis.
 
-			// Because we want to fit the orthogrpahic projection tightly around the Cascade, we set the Mimiumum cascade 
-			// value to the previous Frustum end Interval
+		// Because we want to fit the orthogrpahic projection tightly around the Cascade, we set the Mimiumum cascade 
+		// value to the previous Frustum end Interval
 		if (iCascadeIndex == 0) fFrustumIntervalBegin = 0.0f;
 		else fFrustumIntervalBegin = float(m_iCascadePartitionsZeroToOne[iCascadeIndex - 1]);
 
@@ -274,8 +274,8 @@ void Light::CalculateDirectionalFrustumMatrices()
 		// This code removes the shimmering effect along the edges of shadows due to
 		// the light changing to fit the camera.
 
-			// We calculate a looser bound based on the size of the PCF blur.  This ensures us that we're 
-			// sampling within the correct map.
+		// We calculate a looser bound based on the size of the PCF blur.  This ensures us that we're 
+		// sampling within the correct map.
 		float scaleDueToBlurAMT = (float(3 * 2 + 1)
 			/ float(shadowMapDimension));
 		DirectX::XMVECTORF32 scaleDueToBlurAMTVec = { scaleDueToBlurAMT, scaleDueToBlurAMT, 0.0f, 0.0f };

@@ -34,11 +34,9 @@ Game::Game(HINSTANCE hInstance)
 	vertexBuffer = 0;
 	indexBuffer = 0;
 
-#if defined(DEBUG) || defined(_DEBUG)
 	// Do we want a console window?  Probably only in debug mode
 	CreateConsoleWindow(500, 120, 32, 120);
 	printf("Console window created successfully.  Feel free to printf() here.\n");
-#endif
 }
 
 // --------------------------------------------------------
@@ -130,20 +128,23 @@ void Game::Init()
 	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
 	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
 
-	entityCount = 101;
+	entityCount = 2;
 	entities = new GameEntity * [entityCount];
 
 	// Create GameEntity & Initial Transform
 	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
 	const auto modelData2 = Mesh::LoadFromFile("models\\Rock\\quad.obj", device, context);
 
-	for (int i = 0; i < 10; ++i)
-	for (int j = 0; j < 10; ++j)
-	{
-		entities[10 * i + j] = new GameEntity(modelData1.first);
-		entities[10 * i + j]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
-		entities[10 * i + j]->SetTranslation(XMFLOAT3(3.0f * (j - 9.0f / 2.0f), 1.0f, 3.0f * (i - 9.0f / 2.0f)));
-	}
+	//for (int i = 0; i < 10; ++i)
+	//for (int j = 0; j < 10; ++j)
+	//{
+	//	entities[10 * i + j] = new GameEntity(modelData1.first);
+	//	entities[10 * i + j]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	//	entities[10 * i + j]->SetTranslation(XMFLOAT3(3.0f * (j - 9.0f / 2.0f), 1.0f, 3.0f * (i - 9.0f / 2.0f)));
+	//}
+	entities[0] = new GameEntity(modelData1.first);
+	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	entities[0]->SetTranslation(XMFLOAT3(0.0f, 1.0f, 0.0f));
 
 	entities[entityCount - 1] = new GameEntity(modelData2.first);
 	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 100.0f, 100.0f));
@@ -175,7 +176,6 @@ void Game::Init()
 			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
 			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
 			resource->Release();
-			brdfMaterial->InitializeSampler();
 		}
 		if (originalMaterial->normalSrvPtr)
 		{
@@ -183,8 +183,8 @@ void Game::Init()
 			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
 			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
 			resource->Release();
-			brdfMaterial->InitializeSampler();
 		}
+		brdfMaterial->InitializeSampler();
 		entities[0]->GetMeshAt(k)->SetMaterial(brdfMaterial);
 	}
 
@@ -205,7 +205,6 @@ void Game::Init()
 			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
 			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
 			resource->Release();
-			brdfMaterial->InitializeSampler();
 		}
 		if (originalMaterial->normalSrvPtr)
 		{
@@ -213,12 +212,10 @@ void Game::Init()
 			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
 			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
 			resource->Release();
-			brdfMaterial->InitializeSampler();
 		}
+		brdfMaterial->InitializeSampler();
 		entities[entityCount - 1]->GetMeshAt(k)->SetMaterial(brdfMaterial);
 	}
-
-
 
 	// Get the AABB bounding box of the scene
 	XMVECTOR vMeshMin;
@@ -231,23 +228,44 @@ void Game::Init()
 		for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
 		{
 			auto msh = entities[i]->GetMeshAt(j);
-			vMeshMin = XMVectorSet(msh->BoundingBoxCenter.x - msh->BoundingBoxExtents.x,
-				msh->BoundingBoxCenter.y - msh->BoundingBoxExtents.y,
-				msh->BoundingBoxCenter.z - msh->BoundingBoxExtents.z,
+			XMFLOAT3 bbCenter = msh->BoundingBoxCenter;
+			XMFLOAT3 bbExtent = msh->BoundingBoxExtents;
+			XMVECTOR cen = XMLoadFloat3(&bbCenter);
+			XMVECTOR ext = XMLoadFloat3(&bbExtent);
+			XMVECTOR min = cen - ext;
+			XMVECTOR max = cen + ext;
+
+
+			XMFLOAT4X4 worldMat = entities[i]->GetWorldMatrix();
+			XMMATRIX mat = XMLoadFloat4x4(&worldMat);
+			mat = XMMatrixTranspose(mat);
+
+			BoundingBox bb;
+			BoundingBox::CreateFromPoints(bb, min, max);
+			bb.Transform(bb, mat);
+
+			vMeshMin = XMVectorSet(bb.Center.x - bb.Extents.x,
+				bb.Center.y - bb.Extents.y,
+				bb.Center.z - bb.Extents.z,
 				1.0f);
 
-			vMeshMax = XMVectorSet(msh->BoundingBoxCenter.x + msh->BoundingBoxExtents.x,
-				msh->BoundingBoxCenter.y + msh->BoundingBoxExtents.y,
-				msh->BoundingBoxCenter.z + msh->BoundingBoxExtents.z,
+			vMeshMax = XMVectorSet(bb.Center.x + bb.Extents.x,
+				bb.Center.y + bb.Extents.y,
+				bb.Center.z + bb.Extents.z,
 				1.0f);
-
-			vMeshMin = XMVector4Transform(vMeshMin, XMLoadFloat4x4(&entities[i]->GetWorldMatrix()));
-			vMeshMax = XMVector4Transform(vMeshMax, XMLoadFloat4x4(&entities[i]->GetWorldMatrix()));
 
 			sceneAABBMin = XMVectorMin(vMeshMin, sceneAABBMin);
 			sceneAABBMax = XMVectorMax(vMeshMax, sceneAABBMax);
 		}
 	}
+
+	XMFLOAT4 aabbMin{};
+	XMFLOAT4 aabbMax{};
+	DirectX::XMStoreFloat4(&aabbMin, sceneAABBMin);
+	DirectX::XMStoreFloat4(&aabbMax, sceneAABBMax);
+
+	LOG_DEBUG << "AABB MIN: x = " << aabbMin.x << ", y = " << aabbMin.y << ", z = " << aabbMin.z << ", w = " << aabbMin.w << std::endl;
+	LOG_DEBUG << "AABB MAX: x = " << aabbMax.x << ", y = " << aabbMax.y << ", z = " << aabbMax.z << ", w = " << aabbMax.w << std::endl;
 
 	skyboxCount = 3;
 	skyboxes = new Skybox * [skyboxCount];
@@ -262,15 +280,15 @@ void Game::Init()
 	}
 
 	// Initialize Light
-	lightCount = 1;
+	lightCount = 3;
 	lightData = new LightStructure[lightCount];
 
 	//lightData[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
 	//lightData[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
 	//lightData[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
 	lightData[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, -1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
-	//lightData[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
-	//lightData[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
+	//lightData[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 3.0f, 0.0f), 8.0f, 1.0f);
+	//lightData[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 3.0f, 0.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), 10.0f, 0.8f, 1.0f);
 
 	// Create FirstPersonCamera
 	camera = new FirstPersonCamera(float(width), float(height));
@@ -345,6 +363,7 @@ void Game::Init()
 	comparisonSamplerDesc.MaxAnisotropy = 0;
 	comparisonSamplerDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
 	comparisonSamplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+	//comparisonSamplerDesc.MaxAnisotropy = 16;
 
 	// Point filtered shadows can be faster, and may be a good choice when
 	// rendering on hardware with lower feature levels. This sample has a
@@ -370,6 +389,9 @@ void Game::Init()
 	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
 	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
 	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
+	shadowRenderStateDesc.DepthBias = 100;
+	shadowRenderStateDesc.DepthBiasClamp = 0.1f;
+	shadowRenderStateDesc.SlopeScaledDepthBias = 1.0f;
 	shadowRenderStateDesc.DepthClipEnable = true;
 
 	device->CreateRasterizerState(
@@ -398,6 +420,9 @@ bool turnOnNormalMap = true;
 bool visualizeCascade = false;
 bool rotateSkybox = false;
 bool modelAnimationDir = false;
+
+float cascadeBlendArea = 0.001f;
+
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -407,23 +432,23 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
 		XMVECTOR yVec = XMLoadFloat3(&yAxis);
-		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime / 3.0f);
 		XMVECTOR lightDirection = XMLoadFloat3(&lightData[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMFLOAT3 newLightDirection{};
 		XMStoreFloat3(&newLightDirection, lightDirection);
 		lights[0]->SetDirection(newLightDirection);
 
-		//XMVECTOR lightPosition = XMLoadFloat3(&lightData[1].Position);
-		//lightPosition = XMVector3Rotate(lightPosition, rotateQ);
-		//XMStoreFloat3(&lightData[1].Position, lightPosition);
+		XMVECTOR lightPosition = XMLoadFloat3(&lightData[1].Position);
+		lightPosition = XMVector3Rotate(lightPosition, rotateQ);
+		XMStoreFloat3(&lightData[1].Position, lightPosition);
 
-		//XMFLOAT3 xAxis = { 1.0f, 0.0f, 0.0f };
-		//XMVECTOR xVec = XMLoadFloat3(&xAxis);
-		//XMVECTOR rotateXQ = XMQuaternionRotationAxis(xVec, deltaTime);
-		//XMVECTOR spotLightDirection = XMLoadFloat3(&lightData[2].Direction);
-		//spotLightDirection = XMVector3Rotate(spotLightDirection, rotateXQ);
-		//XMStoreFloat3(&lightData[2].Direction, spotLightDirection);
+		XMFLOAT3 xAxis = { 1.0f, 0.0f, 0.0f };
+		XMVECTOR xVec = XMLoadFloat3(&xAxis);
+		XMVECTOR rotateXQ = XMQuaternionRotationAxis(xVec, deltaTime);
+		XMVECTOR spotLightDirection = XMLoadFloat3(&lightData[2].Direction);
+		spotLightDirection = XMVector3Rotate(spotLightDirection, rotateXQ);
+		XMStoreFloat3(&lightData[2].Direction, spotLightDirection);
 	}
 
 	if (animateModel)
@@ -509,7 +534,7 @@ void Game::Update(float deltaTime, float totalTime)
 	if (GetAsyncKeyState('R') & 0x1)
 	{
 		rotateSkybox = !rotateSkybox;
-	}	
+	}
 	if (GetAsyncKeyState('V') & 0x1)
 	{
 		visualizeCascade = !visualizeCascade;
@@ -522,6 +547,21 @@ void Game::Update(float deltaTime, float totalTime)
 		currentSkybox %= skyboxCount;
 	}
 	const float materialSpeed = 0.5f;
+
+	// Set cascaded shadow map blend area
+	if (GetAsyncKeyState('O') & 0x8000)
+	{
+		cascadeBlendArea -= 0.001f;
+		if (cascadeBlendArea < 0.0f) cascadeBlendArea = 0.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+	if (GetAsyncKeyState('P') & 0x8000)
+	{
+		cascadeBlendArea += 0.001f;
+		if (cascadeBlendArea > 1.0f) cascadeBlendArea = 1.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+
 	// Set Roughness
 	if (GetAsyncKeyState(VK_LEFT) & 0x8000)
 	{
@@ -584,6 +624,7 @@ void Game::Update(float deltaTime, float totalTime)
 // --------------------------------------------------------
 // Clear the screen, redraw everything, present to the user
 // --------------------------------------------------------
+
 void Game::Draw(float deltaTime, float totalTime)
 {
 	const float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -736,10 +777,10 @@ void Game::Draw(float deltaTime, float totalTime)
 
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopStart", 3 / -2);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopEnd", 3 / 2 + 1);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", 0.150f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", cascadeBlendArea);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fTexelSize", 1.0f / 2048.0f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fNativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0.002f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
 
 				XMMATRIX matTextureScale = XMMatrixScaling(0.5f, -0.5f, 1.0f);
@@ -804,8 +845,8 @@ void Game::Draw(float deltaTime, float totalTime)
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
 			if (!result) LOG_WARNING << "Error setting parameter " << "hasDiffuseTexture" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
-			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
-			if (!result) LOG_WARNING << "Error setting parameter " << "CameraDirection" << " to pixel shader. Variable not found or size incorrect." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraPosition", camera->GetPosition());
+			if (!result) LOG_WARNING << "Error setting parameter " << "CameraPosition" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
 			XMMATRIX skyboxRotationMatrix = XMMatrixTranspose(XMMatrixRotationQuaternion(XMQuaternionInverse(skyboxes[currentSkybox]->GetRotationQuaternion())));
 			XMFLOAT4X4 m{};
@@ -989,13 +1030,11 @@ void Game::OnMouseWheel(float wheelDelta, int x, int y)
 	for (int i = 0; i < entityCount; ++i)
 	{
 		XMFLOAT3 objTranslation = entities[i]->GetTranslation();
-		const float zTemp = objTranslation.z;
 		XMFLOAT3 objScale = entities[i]->GetScale();
 
 		XMVECTOR vec = XMLoadFloat3(&objTranslation);
 		vec = XMVectorScale(vec, scale);
 		XMStoreFloat3(&objTranslation, vec);
-		objTranslation.z = zTemp;
 
 		vec = XMLoadFloat3(&objScale);
 		vec = XMVectorScale(vec, scale);
