@@ -310,7 +310,7 @@ void CalculatePCFPercentLit(in float4 vShadowTexCoord,
 
 float4 main(VertexToPixel input) : SV_TARGET
 {
-	float3 v = normalize(float4(CameraPosition, 1.0f) - input.worldPos);
+	float3 v = normalize(float4(CameraPosition, 1.0f) - input.worldPos).xyz;
 	float3 n = normalize(input.normal);
 	float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
 	float3 b = normalize(cross(n, t));
