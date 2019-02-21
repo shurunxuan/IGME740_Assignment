@@ -387,7 +387,7 @@ void Game::Init()
 
 	D3D11_RASTERIZER_DESC shadowRenderStateDesc;
 	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
-	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
+	shadowRenderStateDesc.CullMode = D3D11_CULL_BACK;
 	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
 	shadowRenderStateDesc.DepthBias = 100;
 	shadowRenderStateDesc.DepthBiasClamp = 0.1f;
