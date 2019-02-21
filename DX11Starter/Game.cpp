@@ -62,6 +62,9 @@ Game::~Game()
 	delete skyboxPixelShader;
 	delete shadowVertexShader;
 	delete shadowPixelShader;
+	delete postProcessingVertexShader;
+	delete postProcessingPixelShader;
+
 
 	if (drawingRenderState) { drawingRenderState->Release(); }
 	if (shadowRenderState) { shadowRenderState->Release(); }
@@ -124,6 +127,12 @@ void Game::Init()
 
 	shadowPixelShader = new SimplePixelShader(device, context);
 	shadowPixelShader->LoadShaderFile(L"ShadowPS.cso");
+
+	postProcessingVertexShader = new SimpleVertexShader(device, context);
+	postProcessingVertexShader->LoadShaderFile(L"PostProcessingVS.cso");
+
+	postProcessingPixelShader = new SimplePixelShader(device, context);
+	postProcessingPixelShader->LoadShaderFile(L"PostProcessingPS.cso");
 
 	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
 	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
@@ -634,6 +643,7 @@ void Game::Draw(float deltaTime, float totalTime)
 	//  - Do this ONCE PER FRAME
 	//  - At the beginning of Draw (before drawing *anything*)
 	context->ClearRenderTargetView(backBufferRTV, color);
+	context->ClearRenderTargetView(renderTargetView, color);
 	context->ClearDepthStencilView(
 		depthStencilView,
 		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
@@ -734,7 +744,8 @@ void Game::Draw(float deltaTime, float totalTime)
 
 	context->RSSetViewports(1, &viewport);
 	context->RSSetState(drawingRenderState);
-	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
+	context->OMSetRenderTargets(1, &renderTargetView, depthStencilView);
+	//context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -952,7 +963,15 @@ void Game::Draw(float deltaTime, float totalTime)
 
 	context->DrawIndexed(36, 0, 0);
 #pragma endregion 
+
 #pragma region PostProcessing
+
+	// Render to screen
+	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
+
+	// Set texture
+	postProcessingPixelShader->SetSamplerState("basicSampler", )
+
 #pragma endregion 
 
 

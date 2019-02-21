@@ -52,6 +52,8 @@ private:
 	SimplePixelShader* brdfPixelShader;
 	SimpleVertexShader* skyboxVertexShader;
 	SimplePixelShader* skyboxPixelShader;
+	SimpleVertexShader* postProcessingVertexShader;
+	SimplePixelShader* postProcessingPixelShader;
 
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.
