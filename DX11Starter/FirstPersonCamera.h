@@ -19,6 +19,9 @@ public:
 
 	DirectX::XMFLOAT3 GetPosition() const;
 
+	float GetNearClip() const;
+	float GetFarClip() const;
+
 private:
 	DirectX::XMFLOAT3 position;
 	DirectX::XMFLOAT3 direction;

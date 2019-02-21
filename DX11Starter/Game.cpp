@@ -34,11 +34,9 @@ Game::Game(HINSTANCE hInstance)
 	vertexBuffer = 0;
 	indexBuffer = 0;
 
-#if defined(DEBUG) || defined(_DEBUG)
 	// Do we want a console window?  Probably only in debug mode
 	CreateConsoleWindow(500, 120, 32, 120);
 	printf("Console window created successfully.  Feel free to printf() here.\n");
-#endif
 }
 
 // --------------------------------------------------------
@@ -62,9 +60,12 @@ Game::~Game()
 	delete brdfPixelShader;
 	delete skyboxVertexShader;
 	delete skyboxPixelShader;
+	delete shadowVertexShader;
+	delete shadowPixelShader;
 
-	if (anisotropicSampler) { anisotropicSampler->Release(); }
-	if (preIntegratedSrv) { preIntegratedSrv->Release(); }
+	if (drawingRenderState) { drawingRenderState->Release(); }
+	if (shadowRenderState) { shadowRenderState->Release(); }
+	if (comparisonSampler) { comparisonSampler->Release(); }
 
 	// Delete GameEntity data
 	for (int i = 0; i < entityCount; ++i)
@@ -84,6 +85,12 @@ Game::~Game()
 	delete camera;
 
 	// Delete Light
+	delete[] lightData;
+
+	for (int i = 0; i < lightCount; ++i)
+	{
+		delete lights[i];
+	}
 	delete[] lights;
 
 }
@@ -97,12 +104,201 @@ void Game::Init()
 	// Initialize Loggers
 	ADD_LOGGER(info, std::cout);
 
-	// Helper methods for loading shaders, creating some basic
-	// geometry to draw and some simple camera matrices.
-	//  - You'll be expanding and/or replacing these later
-	LoadShaders();
-	CreateMatrices();
-	CreateBasicGeometry();
+	vertexShader = new SimpleVertexShader(device, context);
+	vertexShader->LoadShaderFile(L"VertexShader.cso");
+
+	blinnPhongPixelShader = new SimplePixelShader(device, context);
+	blinnPhongPixelShader->LoadShaderFile(L"BlinnPhong.cso");
+
+	brdfPixelShader = new SimplePixelShader(device, context);
+	brdfPixelShader->LoadShaderFile(L"BRDF.cso");
+
+	skyboxVertexShader = new SimpleVertexShader(device, context);
+	skyboxVertexShader->LoadShaderFile(L"SkyboxVS.cso");
+
+	skyboxPixelShader = new SimplePixelShader(device, context);
+	skyboxPixelShader->LoadShaderFile(L"SkyboxPS.cso");
+
+	shadowVertexShader = new SimpleVertexShader(device, context);
+	shadowVertexShader->LoadShaderFile(L"ShadowVS.cso");
+
+	shadowPixelShader = new SimplePixelShader(device, context);
+	shadowPixelShader->LoadShaderFile(L"ShadowPS.cso");
+
+	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
+	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
+
+	entityCount = 2;
+	entities = new GameEntity * [entityCount];
+
+	// Create GameEntity & Initial Transform
+	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
+	const auto modelData2 = Mesh::LoadFromFile("models\\Rock\\quad.obj", device, context);
+
+	//for (int i = 0; i < 10; ++i)
+	//for (int j = 0; j < 10; ++j)
+	//{
+	//	entities[10 * i + j] = new GameEntity(modelData1.first);
+	//	entities[10 * i + j]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	//	entities[10 * i + j]->SetTranslation(XMFLOAT3(3.0f * (j - 9.0f / 2.0f), 1.0f, 3.0f * (i - 9.0f / 2.0f)));
+	//}
+	entities[0] = new GameEntity(modelData1.first);
+	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	entities[0]->SetTranslation(XMFLOAT3(0.0f, 1.0f, 0.0f));
+
+	entities[entityCount - 1] = new GameEntity(modelData2.first);
+	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 10.0f, 10.0f));
+	XMFLOAT3 zAxis{ 0.0f, 0.0f, 1.0f };
+	XMFLOAT4 q{};
+	XMVECTOR z = XMLoadFloat3(&zAxis);
+	XMVECTOR rq = XMQuaternionRotationAxis(z, XM_PIDIV2);
+	XMStoreFloat4(&q, rq);
+	entities[entityCount - 1]->SetRotation(q);
+
+	//entities[2] = new GameEntity(modelData1.first);
+	//entities[2]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
+	//entities[2]->SetTranslation(XMFLOAT3(0.0f, -2.0f, 0.0f));
+
+	for (int k = 0; k < entities[0]->GetMeshCount(); ++k)
+	{
+		auto originalMaterial = entities[0]->GetMeshAt(k)->GetMaterial();
+		// Test the new BRDF Material
+		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
+		// Gold
+		brdfMaterial->parameters.albedo = { 1.000000f, 0.765557f, 0.336057f };
+		brdfMaterial->parameters.roughness = 0.5f;
+		brdfMaterial->parameters.metalness = 0.1f;
+		ID3D11Resource* resource;
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+		if (originalMaterial->diffuseSrvPtr)
+		{
+			originalMaterial->diffuseSrvPtr->GetResource(&resource);
+			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
+			resource->Release();
+		}
+		if (originalMaterial->normalSrvPtr)
+		{
+			originalMaterial->normalSrvPtr->GetResource(&resource);
+			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
+			resource->Release();
+		}
+		brdfMaterial->InitializeSampler();
+		entities[0]->GetMeshAt(k)->SetMaterial(brdfMaterial);
+	}
+
+	for (int k = 0; k < entities[entityCount - 1]->GetMeshCount(); ++k)
+	{
+		auto originalMaterial = entities[entityCount - 1]->GetMeshAt(k)->GetMaterial();
+		// Test the new BRDF Material
+		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
+		// Gold
+		brdfMaterial->parameters.albedo = { 0.5f, 0.5f, 0.5f };
+		brdfMaterial->parameters.roughness = 1.0f;
+		brdfMaterial->parameters.metalness = 0.0f;
+		ID3D11Resource* resource;
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+		if (originalMaterial->diffuseSrvPtr)
+		{
+			originalMaterial->diffuseSrvPtr->GetResource(&resource);
+			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
+			resource->Release();
+		}
+		if (originalMaterial->normalSrvPtr)
+		{
+			originalMaterial->normalSrvPtr->GetResource(&resource);
+			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
+			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
+			resource->Release();
+		}
+		brdfMaterial->InitializeSampler();
+		entities[entityCount - 1]->GetMeshAt(k)->SetMaterial(brdfMaterial);
+	}
+
+	// Get the AABB bounding box of the scene
+	XMVECTOR meshMin;
+	XMVECTOR meshMax;
+	sceneAABBMin = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
+	sceneAABBMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX };
+	// Calculate the AABB for the scene by iterating through all the meshes in the SDKMesh file.
+	for (int i = 0; i < entityCount; ++i)
+	{
+		for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+		{
+			auto msh = entities[i]->GetMeshAt(j);
+			XMFLOAT3 bbCenter = msh->BoundingBoxCenter;
+			XMFLOAT3 bbExtent = msh->BoundingBoxExtents;
+			XMVECTOR cen = XMLoadFloat3(&bbCenter);
+			XMVECTOR ext = XMLoadFloat3(&bbExtent);
+			XMVECTOR min = cen - ext;
+			XMVECTOR max = cen + ext;
+
+
+			XMFLOAT4X4 worldMat = entities[i]->GetWorldMatrix();
+			XMMATRIX mat = XMLoadFloat4x4(&worldMat);
+			mat = XMMatrixTranspose(mat);
+
+			BoundingBox bb;
+			BoundingBox::CreateFromPoints(bb, min, max);
+			bb.Transform(bb, mat);
+
+			meshMin = XMVectorSet(bb.Center.x - bb.Extents.x,
+				bb.Center.y - bb.Extents.y,
+				bb.Center.z - bb.Extents.z,
+				1.0f);
+
+			meshMax = XMVectorSet(bb.Center.x + bb.Extents.x,
+				bb.Center.y + bb.Extents.y,
+				bb.Center.z + bb.Extents.z,
+				1.0f);
+
+			sceneAABBMin = XMVectorMin(meshMin, sceneAABBMin);
+			sceneAABBMax = XMVectorMax(meshMax, sceneAABBMax);
+		}
+	}
+
+	XMFLOAT4 aabbMin{};
+	XMFLOAT4 aabbMax{};
+	DirectX::XMStoreFloat4(&aabbMin, sceneAABBMin);
+	DirectX::XMStoreFloat4(&aabbMax, sceneAABBMax);
+
+	LOG_DEBUG << "AABB MIN: x = " << aabbMin.x << ", y = " << aabbMin.y << ", z = " << aabbMin.z << ", w = " << aabbMin.w << std::endl;
+	LOG_DEBUG << "AABB MAX: x = " << aabbMax.x << ", y = " << aabbMax.y << ", z = " << aabbMax.z << ", w = " << aabbMax.w << std::endl;
+
+	skyboxCount = 3;
+	skyboxes = new Skybox * [skyboxCount];
+	skyboxes[0] = new Skybox(device, context, "models\\Skyboxes\\Environment2HiDef.cubemap.dds", "models\\Skyboxes\\Environment2Light.cubemap.dds");
+	skyboxes[1] = new Skybox(device, context, "models\\Skyboxes\\Environment3HiDef.cubemap.dds", "models\\Skyboxes\\Environment3Light.cubemap.dds");
+	skyboxes[2] = new Skybox(device, context, "models\\Skyboxes\\Environment1HiDef.cubemap.dds", "models\\Skyboxes\\Environment1Light.cubemap.dds");
+	currentSkybox = 0;
+	for (int i = 0; i < skyboxCount; ++i)
+	{
+		skyboxes[i]->SetVertexShader(skyboxVertexShader);
+		skyboxes[i]->SetPixelShader(skyboxPixelShader);
+	}
+
+	// Initialize Light
+	lightCount = 3;
+	lightData = new LightStructure[lightCount];
+
+	//lightData[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
+	//lightData[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
+	//lightData[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
+	lightData[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, -1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
+	//lightData[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 3.0f, 0.0f), 8.0f, 1.0f);
+	//lightData[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 3.0f, 0.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), 10.0f, 0.8f, 1.0f);
+
+	// Create FirstPersonCamera
+	camera = new FirstPersonCamera(float(width), float(height));
+
+	lights = new Light * [lightCount];
+
+	for (int i = 0; i < lightCount; ++i)
+	{
+		lights[i] = new Light(lightData + i, device, context, camera, sceneAABBMin, sceneAABBMax);
+	}
 
 	// Tell the input assembler stage of the pipeline what kind of
 	// geometric primitives (points, lines or triangles) we want to draw.  
@@ -151,142 +347,57 @@ void Game::Init()
 	// Create depth stencil state
 	device->CreateDepthStencilState(&dsDesc, &depthStencilState);
 	context->OMSetDepthStencilState(depthStencilState, 0);
-}
 
-// --------------------------------------------------------
-// Loads shaders from compiled shader object (.cso) files using
-// my SimpleShader wrapper for DirectX shader manipulation.
-// - SimpleShader provides helpful methods for sending
-//   data to individual variables on the GPU
-// --------------------------------------------------------
-void Game::LoadShaders()
-{
-	vertexShader = new SimpleVertexShader(device, context);
-	vertexShader->LoadShaderFile(L"VertexShader.cso");
+	D3D11_SAMPLER_DESC comparisonSamplerDesc;
+	ZeroMemory(&comparisonSamplerDesc, sizeof(D3D11_SAMPLER_DESC));
+	comparisonSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+	comparisonSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+	comparisonSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+	comparisonSamplerDesc.BorderColor[0] = 1.0f;
+	comparisonSamplerDesc.BorderColor[1] = 1.0f;
+	comparisonSamplerDesc.BorderColor[2] = 1.0f;
+	comparisonSamplerDesc.BorderColor[3] = 1.0f;
+	comparisonSamplerDesc.MinLOD = 0.f;
+	comparisonSamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	comparisonSamplerDesc.MipLODBias = 0.f;
+	comparisonSamplerDesc.MaxAnisotropy = 0;
+	comparisonSamplerDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+	comparisonSamplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+	//comparisonSamplerDesc.MaxAnisotropy = 16;
 
-	blinnPhongPixelShader = new SimplePixelShader(device, context);
-	blinnPhongPixelShader->LoadShaderFile(L"BlinnPhong.cso");
+	// Point filtered shadows can be faster, and may be a good choice when
+	// rendering on hardware with lower feature levels. This sample has a
+	// UI option to enable/disable filtering so you can see the difference
+	// in quality and speed.
 
-	brdfPixelShader = new SimplePixelShader(device, context);
-	brdfPixelShader->LoadShaderFile(L"BRDF.cso");
+	device->CreateSamplerState(
+		&comparisonSamplerDesc,
+		&comparisonSampler
+	);
 
-	skyboxVertexShader = new SimpleVertexShader(device, context);
-	skyboxVertexShader->LoadShaderFile(L"SkyboxVS.cso");
+	D3D11_RASTERIZER_DESC drawingRenderStateDesc;
+	ZeroMemory(&drawingRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
+	drawingRenderStateDesc.CullMode = D3D11_CULL_BACK;
+	drawingRenderStateDesc.FillMode = D3D11_FILL_SOLID;
+	drawingRenderStateDesc.DepthClipEnable = true; // Feature level 9_1 requires DepthClipEnable == true
+	device->CreateRasterizerState(
+		&drawingRenderStateDesc,
+		&drawingRenderState
+	);
 
-	skyboxPixelShader = new SimplePixelShader(device, context);
-	skyboxPixelShader->LoadShaderFile(L"SkyboxPS.cso");
+	D3D11_RASTERIZER_DESC shadowRenderStateDesc;
+	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
+	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
+	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
+	shadowRenderStateDesc.DepthBias = 100;
+	shadowRenderStateDesc.DepthBiasClamp = 0.1f;
+	shadowRenderStateDesc.SlopeScaledDepthBias = 1.0f;
+	shadowRenderStateDesc.DepthClipEnable = true;
 
-	// Load Pre Integrated Texture
-	// texture file
-	std::string name = "model\\ibl_brdf_lut.png";
-	// string -> wstring
-	std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> cv;
-	std::wstring wName = cv.from_bytes(name);
-	HRESULT hr = DirectX::CreateWICTextureFromFile(device, context, wName.c_str(), nullptr, &preIntegratedSrv);
-	if (FAILED(hr))
-	{
-		LOG_WARNING << "Failed to load pre-integrated texture file \"" << name << "\"." << std::endl;
-	}
-	else
-	{
-		LOG_INFO << "Load pre-integrated texture file \"" << name << "\"." << std::endl;
-	}
-
-	D3D11_SAMPLER_DESC samplerDesc;
-	ZeroMemory(&samplerDesc, sizeof samplerDesc);
-
-	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
-	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
-
-	hr = device->CreateSamplerState(&samplerDesc, &anisotropicSampler);
-	if (FAILED(hr))
-		LOG_ERROR << "Failed to create anisotropic sampler." << std::endl;
-
-	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
-	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
-
-	skyboxCount = 3;
-	skyboxes = new Skybox * [skyboxCount];
-	skyboxes[0] = new Skybox(device, context, "models\\Skyboxes\\Environment2HiDef.cubemap.dds", "models\\Skyboxes\\Environment2Light.cubemap.dds");
-	skyboxes[1] = new Skybox(device, context, "models\\Skyboxes\\Environment3HiDef.cubemap.dds", "models\\Skyboxes\\Environment3Light.cubemap.dds");
-	skyboxes[2] = new Skybox(device, context, "models\\Skyboxes\\Environment1HiDef.cubemap.dds", "models\\Skyboxes\\Environment1Light.cubemap.dds");
-	currentSkybox = 0;
-	for (int i = 0; i < skyboxCount; ++i)
-	{
-		skyboxes[i]->SetVertexShader(skyboxVertexShader);
-		skyboxes[i]->SetPixelShader(skyboxPixelShader);
-	}
-
-	// Initialize Light
-	lightCount = 1;
-	lights = new Light[lightCount];
-
-	//lights[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
-	//lights[1] = PointLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
-	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
-	lights[0] = DirectionalLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(1.0f, 1.0f, 1.0f));
-	//lights[1] = PointLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(2.0f, 0.0f, 0.0f), 3.0f, 1.0f);
-	//lights[2] = SpotLight(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, -2.0f), XMFLOAT3(0.0f, 0.5f, 1.0f), 10.0f, 0.8f, 1.0f);
-}
-
-
-
-// --------------------------------------------------------
-// Initializes the matrices necessary to represent our geometry's 
-// transformations and our 3D camera
-// --------------------------------------------------------
-void Game::CreateMatrices()
-{
-	// Create FirstPersonCamera
-	camera = new FirstPersonCamera(float(width), float(height));
-}
-
-// --------------------------------------------------------
-// Creates the geometry we're going to draw - a single triangle for now
-// --------------------------------------------------------
-void Game::CreateBasicGeometry()
-{
-	entityCount = 1;
-	entities = new GameEntity * [entityCount];
-
-	// Create GameEntity & Initial Transform
-	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
-
-	entities[0] = new GameEntity(modelData1.first);
-	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
-
-	for (int k = 0; k < entities[0]->GetMeshCount(); ++k)
-	{
-		auto originalMaterial = entities[0]->GetMeshAt(k)->GetMaterial();
-		// Test the new BRDF Material
-		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
-		// Gold
-		brdfMaterial->parameters.albedo = { 1.000000f, 0.765557f, 0.336057f };
-		brdfMaterial->parameters.roughness = 0.5f;
-		brdfMaterial->parameters.metalness = 0.1f;
-		ID3D11Resource* resource;
-		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
-		if (originalMaterial->diffuseSrvPtr)
-		{
-			originalMaterial->diffuseSrvPtr->GetResource(&resource);
-			originalMaterial->diffuseSrvPtr->GetDesc(&srvDesc);
-			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->diffuseSrvPtr);
-			resource->Release();
-			brdfMaterial->InitializeSampler();
-		}
-		if (originalMaterial->normalSrvPtr)
-		{
-			originalMaterial->normalSrvPtr->GetResource(&resource);
-			originalMaterial->normalSrvPtr->GetDesc(&srvDesc);
-			device->CreateShaderResourceView(resource, &srvDesc, &brdfMaterial->normalSrvPtr);
-			resource->Release();
-			brdfMaterial->InitializeSampler();
-		}
-		entities[0]->GetMeshAt(k)->SetMaterial(brdfMaterial);
-	}
+	device->CreateRasterizerState(
+		&shadowRenderStateDesc,
+		&shadowRenderState
+	);
 }
 
 
@@ -306,7 +417,12 @@ void Game::OnResize()
 bool animateLight = false;
 bool animateModel = false;
 bool turnOnNormalMap = true;
+bool visualizeCascade = false;
 bool rotateSkybox = false;
+bool modelAnimationDir = false;
+
+float cascadeBlendArea = 0.001f;
+
 // --------------------------------------------------------
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
@@ -317,32 +433,45 @@ void Game::Update(float deltaTime, float totalTime)
 		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
 		XMVECTOR yVec = XMLoadFloat3(&yAxis);
 		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
-		XMVECTOR lightDirection = XMLoadFloat3(&lights[0].Direction);
+		XMVECTOR lightDirection = XMLoadFloat3(&lightData[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
-		XMStoreFloat3(&lights[0].Direction, lightDirection);
+		XMFLOAT3 newLightDirection{};
+		XMStoreFloat3(&newLightDirection, lightDirection);
+		lights[0]->SetDirection(newLightDirection);
 
-		XMVECTOR lightPosition = XMLoadFloat3(&lights[1].Position);
+		XMVECTOR lightPosition = XMLoadFloat3(&lightData[1].Position);
 		lightPosition = XMVector3Rotate(lightPosition, rotateQ);
-		XMStoreFloat3(&lights[1].Position, lightPosition);
+		XMStoreFloat3(&lightData[1].Position, lightPosition);
 
 		XMFLOAT3 xAxis = { 1.0f, 0.0f, 0.0f };
 		XMVECTOR xVec = XMLoadFloat3(&xAxis);
 		XMVECTOR rotateXQ = XMQuaternionRotationAxis(xVec, deltaTime);
-		XMVECTOR spotLightDirection = XMLoadFloat3(&lights[2].Direction);
+		XMVECTOR spotLightDirection = XMLoadFloat3(&lightData[2].Direction);
 		spotLightDirection = XMVector3Rotate(spotLightDirection, rotateXQ);
-		XMStoreFloat3(&lights[2].Direction, spotLightDirection);
+		XMStoreFloat3(&lightData[2].Direction, spotLightDirection);
 	}
 
 	if (animateModel)
 	{
-		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
-		XMVECTOR yVec = XMLoadFloat3(&yAxis);
-		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
-		XMVECTOR modelRotation = XMLoadFloat4(&entities[0]->GetRotation());
-		modelRotation = XMQuaternionMultiply(modelRotation, rotateQ);
-		XMFLOAT4 rot{};
-		XMStoreFloat4(&rot, modelRotation);
-		entities[0]->SetRotation(rot);
+		//XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
+		//XMVECTOR yVec = XMLoadFloat3(&yAxis);
+		//XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		//XMVECTOR modelRotation = XMLoadFloat4(&entities[0]->GetRotation());
+		//modelRotation = XMQuaternionMultiply(modelRotation, rotateQ);
+		//XMFLOAT4 rot{};
+		//XMStoreFloat4(&rot, modelRotation);
+		//entities[0]->SetRotation(rot);
+
+
+		XMFLOAT3 translation = entities[0]->GetTranslation();
+		if (translation.y > 1.0f) modelAnimationDir = false;
+		else if (translation.y < -1.0f) modelAnimationDir = true;
+		XMVECTOR t = XMLoadFloat3(&translation);
+		XMFLOAT3 delta = { 0.0f, (modelAnimationDir ? 1.0f : -1.0f) * deltaTime, 0.0f };
+		XMVECTOR d = XMLoadFloat3(&delta);
+
+		XMStoreFloat3(&translation, XMVectorAdd(t, d));
+		entities[0]->SetTranslation(translation);
 	}
 
 	if (rotateSkybox)
@@ -406,6 +535,10 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		rotateSkybox = !rotateSkybox;
 	}
+	if (GetAsyncKeyState('V') & 0x1)
+	{
+		visualizeCascade = !visualizeCascade;
+	}
 
 	// Change Skybox
 	if (GetAsyncKeyState('K') & 0x1)
@@ -414,6 +547,21 @@ void Game::Update(float deltaTime, float totalTime)
 		currentSkybox %= skyboxCount;
 	}
 	const float materialSpeed = 0.5f;
+
+	// Set cascaded shadow map blend area
+	if (GetAsyncKeyState('O') & 0x8000)
+	{
+		cascadeBlendArea -= 0.001f;
+		if (cascadeBlendArea < 0.0f) cascadeBlendArea = 0.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+	if (GetAsyncKeyState('P') & 0x8000)
+	{
+		cascadeBlendArea += 0.001f;
+		if (cascadeBlendArea > 1.0f) cascadeBlendArea = 1.0f;
+		LOG_DEBUG << cascadeBlendArea << std::endl;
+	}
+
 	// Set Roughness
 	if (GetAsyncKeyState(VK_LEFT) & 0x8000)
 	{
@@ -425,6 +573,7 @@ void Game::Update(float deltaTime, float totalTime)
 				material->parameters.roughness += materialSpeed * deltaTime;
 				if (material->parameters.roughness > 1.0f) material->parameters.roughness = 1.0f;
 			}
+			break;
 		}
 	}
 	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
@@ -437,6 +586,7 @@ void Game::Update(float deltaTime, float totalTime)
 				material->parameters.roughness -= materialSpeed * deltaTime;
 				if (material->parameters.roughness < 0.0f) material->parameters.roughness = 0.0f;
 			}
+			break;
 		}
 	}
 	// Set Metalness
@@ -450,6 +600,7 @@ void Game::Update(float deltaTime, float totalTime)
 				material->parameters.metalness += materialSpeed * deltaTime;
 				if (material->parameters.metalness > 1.0f) material->parameters.metalness = 1.0f;
 			}
+			break;
 		}
 	}
 	if (GetAsyncKeyState(VK_DOWN) & 0x8000)
@@ -462,6 +613,7 @@ void Game::Update(float deltaTime, float totalTime)
 				material->parameters.metalness -= materialSpeed * deltaTime;
 				if (material->parameters.metalness < 0.0f) material->parameters.metalness = 0.0f;
 			}
+			break;
 		}
 	}
 	// Quit if the escape key is pressed
@@ -472,9 +624,9 @@ void Game::Update(float deltaTime, float totalTime)
 // --------------------------------------------------------
 // Clear the screen, redraw everything, present to the user
 // --------------------------------------------------------
+
 void Game::Draw(float deltaTime, float totalTime)
 {
-	// Background color (Cornflower Blue in this case) for clearing
 	const float color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	//const float color[4] = { 0.4f, 0.6f, 0.75f, 0.0f };
 
@@ -488,8 +640,101 @@ void Game::Draw(float deltaTime, float totalTime)
 		1.0f,
 		0);
 
+	for (int i = 0; i < lightCount; ++i)
+	{
+		context->ClearDepthStencilView(lights[i]->GetShadowDepthView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+	}
+
 	// Update camera view matrix before drawing
 	camera->UpdateViewMatrix();
+
+	// Update light matrices
+	for (int l = 0; l < lightCount; ++l)
+	{
+		lights[l]->UpdateMatrices();
+	}
+
+#pragma region PreProcessing
+	// Render lights
+	for (int l = 0; l < lightCount; ++l)
+	{
+		// Render all the objects in the scene that can cast shadows onto themselves or onto other objects.
+
+		// Only bind the ID3D11DepthStencilView for output.
+		context->OMSetRenderTargets(
+			0,
+			nullptr,
+			lights[l]->GetShadowDepthView()
+		);
+
+		// Note that starting with the second frame, the previous call will display
+		// warnings in VS debug output about forcing an unbind of the pixel shader
+		// resource. This warning can be safely ignored when using shadow buffers
+		// as demonstrated in this sample.
+
+		// Set rendering state.
+		context->RSSetState(shadowRenderState);
+
+		// Render Scene from Light Cascade PoV
+		for (int c = 0; c < lights[l]->GetCascadeCount(); ++c)
+		{
+			context->RSSetViewports(1, lights[l]->GetShadowViewportAt(c));
+			for (int i = 0; i < entityCount; ++i)
+			{
+				for (int j = 0; j < entities[i]->GetMeshCount(); ++j)
+				{
+					XMFLOAT4X4 viewMat{};
+					XMFLOAT4X4 projMat{};
+					XMStoreFloat4x4(&viewMat, lights[l]->GetViewMatrix());
+					XMStoreFloat4x4(&projMat, lights[l]->GetProjectionMatrixAt(c));
+					bool result;
+					result = shadowVertexShader->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
+					if (!result) LOG_WARNING << "Error setting parameter " << "world" << " to vertex shader. Variable not found." << std::endl;
+
+					result = shadowVertexShader->SetMatrix4x4("view", viewMat);
+					if (!result) LOG_WARNING << "Error setting parameter " << "view" << " to vertex shader. Variable not found." << std::endl;
+
+					result = shadowVertexShader->SetMatrix4x4("projection", projMat);
+					if (!result) LOG_WARNING << "Error setting parameter " << "projection" << " to vertex shader. Variable not found." << std::endl;
+
+					shadowVertexShader->CopyAllBufferData();
+
+					shadowVertexShader->SetShader();
+					context->PSSetShader(nullptr, nullptr, 0);
+
+					ID3D11Buffer * vertexBuffer = entities[i]->GetMeshAt(j)->GetVertexBuffer();
+					ID3D11Buffer * indexBuffer = entities[i]->GetMeshAt(j)->GetIndexBuffer();
+					// Set buffers in the input assembler
+					//  - Do this ONCE PER OBJECT you're drawing, since each object might
+					//    have different geometry.
+					UINT stride = sizeof(Vertex);
+					UINT offset = 0;
+					context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+					context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+					context->DrawIndexed(
+						entities[i]->GetMeshAt(j)->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
+						0,								// Offset to the first index we want to use
+						0);								// Offset to add to each index when looking up vertices
+				}
+			}
+		}
+
+	}
+#pragma endregion 
+#pragma region Rendering
+	// Render to screen
+	D3D11_VIEWPORT viewport = {};
+	viewport.TopLeftX = 0;
+	viewport.TopLeftY = 0;
+	viewport.Width = float(width);
+	viewport.Height = float(height);
+	viewport.MinDepth = 0.0f;
+	viewport.MaxDepth = 1.0f;
+
+	context->RSSetViewports(1, &viewport);
+	context->RSSetState(drawingRenderState);
+	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -504,6 +749,8 @@ void Game::Draw(float deltaTime, float totalTime)
 			XMFLOAT4X4 projMat{};
 			XMStoreFloat4x4(&viewMat, camera->GetViewMatrix());
 			XMStoreFloat4x4(&projMat, camera->GetProjectionMatrix());
+			//XMStoreFloat4x4(&viewMat, lights[0]->GetViewMatrix());
+			//XMStoreFloat4x4(&projMat, lights[0]->GetProjectionMatrixAt(0));
 			bool result;
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("world", entities[i]->GetWorldMatrix());
 			if (!result) LOG_WARNING << "Error setting parameter " << "world" << " to vertex shader. Variable not found." << std::endl;
@@ -517,15 +764,65 @@ void Game::Draw(float deltaTime, float totalTime)
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("projection", projMat);
 			if (!result) LOG_WARNING << "Error setting parameter " << "projection" << " to vertex shader. Variable not found." << std::endl;
 
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetInt("lightCount", lightCount);
+			if (!result) LOG_WARNING << "Error setting parameter " << "lightCount" << " to vertex shader. Variable not found." << std::endl;
+
+			// Set lights' matrices
+			if (lightCount > 0)
+			{
+				XMFLOAT4X4 lViewMat{};
+				XMStoreFloat4x4(&lViewMat, lights[0]->GetViewMatrix());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("lView", lViewMat);
+				if (!result) LOG_WARNING << "Error setting parameter " << "lView" << " to vertex shader. Variable." << std::endl;
+
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopStart", 3 / -2);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopEnd", 3 / 2 + 1);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("cascadeBlendArea", cascadeBlendArea);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("texelSize", 1.0f / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("nativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shadowBias", 0);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
+
+				XMMATRIX matTextureScale = XMMatrixScaling(0.5f, -0.5f, 1.0f);
+				XMMATRIX matTextureTranslation = XMMatrixTranslation(.5f, .5f, 0.f);
+
+				XMFLOAT4 cascadeScale[3];
+				XMFLOAT4 cascadeOffset[3];
+				for (int index = 0; index < lights[0]->GetCascadeCount(); ++index)
+				{
+					XMMATRIX mShadowTexture = XMMatrixTranspose(lights[0]->GetProjectionMatrixAt(index)) * matTextureScale * matTextureTranslation;
+					cascadeScale[index].x = XMVectorGetX(mShadowTexture.r[0]);
+					cascadeScale[index].y = XMVectorGetY(mShadowTexture.r[1]);
+					cascadeScale[index].z = XMVectorGetZ(mShadowTexture.r[2]);
+					cascadeScale[index].w = 1;
+
+					XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&cascadeOffset[index]), mShadowTexture.r[3]);
+					cascadeOffset[index].w = 0;
+				}
+
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("cascadeOffset", &cascadeOffset, sizeof(XMFLOAT4) * 3);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("cascadeScale", &cascadeScale, sizeof(XMFLOAT4) * 3);
+
+				// The border padding values keep the pixel shader from reading the borders during PCF filtering.
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("maxBorderPadding", (2048.0f - 1.0f) / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("minBorderPadding", (1.0f) / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("cascadeLevels", lights[0]->GetCascadeCount());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("visualizeCascades", visualizeCascade ? 1 : 0);
+
+				//result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetMatrix4x4("cascadeProjection", lProjMat);
+				//if (!result) LOG_WARNING << "Error setting parameter " << "cascadeProjection" << " to pixel shader. Variable not found." << std::endl;
+			}
+
+
+
 
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("lightCount", lightCount);
 			if (!result) LOG_WARNING << "Error setting parameter " << "lightCount" << " to pixel shader. Variable not found." << std::endl;
 
-
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData(
 				"lights",					// The name of the (eventual) variable in the shader
-				lights,							// The address of the data to copy
-				sizeof(Light) * 128);		// The size of the data to copy
+				lightData,							// The address of the data to copy
+				sizeof(LightStructure) * 24);		// The size of the data to copy
 			if (!result) LOG_WARNING << "Error setting parameter " << "lights" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
 
@@ -548,8 +845,8 @@ void Game::Draw(float deltaTime, float totalTime)
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("hasDiffuseTexture", hasDiffuseTexture ? 1.0f : 0.0f);
 			if (!result) LOG_WARNING << "Error setting parameter " << "hasDiffuseTexture" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
-			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraDirection", camera->GetForward());
-			if (!result) LOG_WARNING << "Error setting parameter " << "CameraDirection" << " to pixel shader. Variable not found or size incorrect." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat3("CameraPosition", camera->GetPosition());
+			if (!result) LOG_WARNING << "Error setting parameter " << "CameraPosition" << " to pixel shader. Variable not found or size incorrect." << std::endl;
 
 			XMMATRIX skyboxRotationMatrix = XMMatrixTranspose(XMMatrixRotationQuaternion(XMQuaternionInverse(skyboxes[currentSkybox]->GetRotationQuaternion())));
 			XMFLOAT4X4 m{};
@@ -559,20 +856,21 @@ void Game::Draw(float deltaTime, float totalTime)
 			// Sampler and Texture
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("basicSampler", entities[i]->GetMeshAt(j)->GetMaterial()->GetSamplerState());
 			if (!result) LOG_WARNING << "Error setting sampler state " << "basicSampler" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("shadowSampler", comparisonSampler);
+			if (!result) LOG_WARNING << "Error setting sampler state " << "shadowSampler" << " to pixel shader. Variable not found." << std::endl;
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("diffuseTexture", entities[i]->GetMeshAt(j)->GetMaterial()->diffuseSrvPtr);
 			if (!result) LOG_WARNING << "Error setting shader resource view " << "diffuseTexture" << " to pixel shader. Variable not found." << std::endl;
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("normalTexture", entities[i]->GetMeshAt(j)->GetMaterial()->normalSrvPtr);
 			if (!result) LOG_WARNING << "Error setting shader resource view " << "normalTexture" << " to pixel shader. Variable not found." << std::endl;
 
+			// Set All IBL data
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("cubemap", skyboxes[currentSkybox]->GetCubemapSrv());
 			if (!result) LOG_WARNING << "Error setting shader resource view " << "cubemap" << " to pixel shader. Variable not found." << std::endl;
 			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("irradianceMap", skyboxes[currentSkybox]->GetIrradianceSrv());
 			if (!result) LOG_WARNING << "Error setting shader resource view " << "irradianceMap" << " to pixel shader. Variable not found." << std::endl;
+			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("shadowMap", lights[0]->GetShadowResourceView());
+			if (!result) LOG_WARNING << "Error setting shader resource view " << "shadowMap" << " to pixel shader. Variable not found." << std::endl;
 
-			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetSamplerState("anisotropic", anisotropicSampler);
-			if (!result) LOG_WARNING << "Error setting sampler state " << "anisotropic" << " to pixel shader. Variable not found." << std::endl;
-			result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("preIntegrated", preIntegratedSrv);
-			if (!result) LOG_WARNING << "Error setting shader resource view " << "preIntegrated" << " to pixel shader. Variable not found." << std::endl;
 			// Once you've set all of the data you care to change for
 			// the next draw call, you need to actually send it to the GPU
 			//  - If you skip this, the "SetMatrix" calls above won't make it to the GPU!
@@ -585,7 +883,6 @@ void Game::Draw(float deltaTime, float totalTime)
 			//    you'll need to swap the current shaders before each draw
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetShader();
 			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShader();
-
 
 			ID3D11Buffer * vertexBuffer = entities[i]->GetMeshAt(j)->GetVertexBuffer();
 			ID3D11Buffer * indexBuffer = entities[i]->GetMeshAt(j)->GetIndexBuffer();
@@ -606,6 +903,9 @@ void Game::Draw(float deltaTime, float totalTime)
 				entities[i]->GetMeshAt(j)->GetIndexCount(),		// The number of indices to use (we could draw a subset if we wanted)
 				0,								// Offset to the first index we want to use
 				0);								// Offset to add to each index when looking up vertices
+
+			// Unbind shadowMap
+			entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetShaderResourceView("shadowMap", nullptr);
 		}
 	}
 
@@ -651,7 +951,9 @@ void Game::Draw(float deltaTime, float totalTime)
 	context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 	context->DrawIndexed(36, 0, 0);
-
+#pragma endregion 
+#pragma region PostProcessing
+#pragma endregion 
 
 
 	// Present the back buffer to the user
@@ -728,13 +1030,11 @@ void Game::OnMouseWheel(float wheelDelta, int x, int y)
 	for (int i = 0; i < entityCount; ++i)
 	{
 		XMFLOAT3 objTranslation = entities[i]->GetTranslation();
-		const float zTemp = objTranslation.z;
 		XMFLOAT3 objScale = entities[i]->GetScale();
 
 		XMVECTOR vec = XMLoadFloat3(&objTranslation);
 		vec = XMVectorScale(vec, scale);
 		XMStoreFloat3(&objTranslation, vec);
-		objTranslation.z = zTemp;
 
 		vec = XMLoadFloat3(&objScale);
 		vec = XMVectorScale(vec, scale);

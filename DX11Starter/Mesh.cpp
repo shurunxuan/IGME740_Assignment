@@ -63,6 +63,36 @@ Mesh::Mesh(Vertex* vertices, int verticesCount, int* indices, int indicesCount, 
 	// - Once we do this, we'll NEVER CHANGE THE BUFFER AGAIN
 	device->CreateBuffer(&ibd, &initialIndexData, &indexBuffer);
 
+	// Calculate Bounding Box out of vertices
+	DirectX::XMFLOAT3 lower = { FLT_MAX , FLT_MAX , FLT_MAX };
+	DirectX::XMFLOAT3 upper = { -FLT_MAX , -FLT_MAX , -FLT_MAX };
+
+	for (int i = 0; i < verticesCount; ++i)
+	{
+		if (lower.x > vertices[i].Position.x)
+			lower.x = vertices[i].Position.x;
+		if (lower.y > vertices[i].Position.y)
+			lower.y = vertices[i].Position.y;
+		if (lower.z > vertices[i].Position.z)
+			lower.z = vertices[i].Position.z;
+		if (upper.x < vertices[i].Position.x)
+			upper.x = vertices[i].Position.x;
+		if (upper.y < vertices[i].Position.y)
+			upper.y = vertices[i].Position.y;
+		if (upper.z < vertices[i].Position.z)
+			upper.z = vertices[i].Position.z;
+	}
+
+	const DirectX::XMFLOAT3 half((upper.x - lower.x) * 0.5f,
+		(upper.y - lower.y) * 0.5f,
+		(upper.z - lower.z) * 0.5f);
+
+	BoundingBoxCenter.x = lower.x + half.x;
+	BoundingBoxCenter.y = lower.y + half.y;
+	BoundingBoxCenter.z = lower.z + half.z;
+
+	BoundingBoxExtents = half;
+
 	LOG_INFO << "Mesh created at <0x" << this << "> by " << __FUNCTION__ << "." << std::endl;
 }
 

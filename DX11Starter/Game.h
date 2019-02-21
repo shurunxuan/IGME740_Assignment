@@ -7,6 +7,7 @@
 #include "Light.h"
 #include <fstream>
 #include "Skybox.h"
+#include <DirectXCollision.h>
 
 class Game 
 	: public DXCore
@@ -30,11 +31,6 @@ public:
 	void OnMouseWheel(float wheelDelta,   int x, int y);
 private:
 
-	// Initialization helper methods - feel free to customize, combine, etc.
-	void LoadShaders(); 
-	void CreateMatrices();
-	void CreateBasicGeometry();
-
 	// Buffers to hold actual geometry data
 	ID3D11Buffer* vertexBuffer;
 	ID3D11Buffer* indexBuffer;
@@ -43,6 +39,12 @@ private:
 	ID3D11BlendState* blendState;
 	// Depth Stencil Test
 	ID3D11DepthStencilState* depthStencilState;
+
+	// Front Face Culling & Back Face Culling render states
+	ID3D11RasterizerState* drawingRenderState;
+	ID3D11RasterizerState* shadowRenderState;
+	ID3D11SamplerState* comparisonSampler;
+
 
 	// Wrappers for DirectX shaders to provide simplified functionality
 	SimpleVertexShader* vertexShader;
@@ -55,14 +57,14 @@ private:
 	// determining how far the mouse moved in a single frame.
 	POINT prevMousePos;
 
+	// Bounding box
+	DirectX::XMVECTOR sceneAABBMin;
+	DirectX::XMVECTOR sceneAABBMax;
+
 	// Skybox
 	int skyboxCount;
 	int currentSkybox;
 	Skybox** skyboxes;
-
-	// Pre Integrated
-	ID3D11SamplerState* anisotropicSampler;
-	ID3D11ShaderResourceView* preIntegratedSrv;
 
 	// Store the GameEntity data
 	int entityCount;
@@ -73,6 +75,9 @@ private:
 
 	// Lighting
 	int lightCount;
-	Light* lights;
+	Light** lights;
+	LightStructure* lightData;
+	SimpleVertexShader* shadowVertexShader;
+	SimplePixelShader* shadowPixelShader;
 };
 

@@ -118,3 +118,13 @@ DirectX::XMFLOAT3 FirstPersonCamera::GetPosition() const
 {
 	return position;
 }
+
+float FirstPersonCamera::GetNearClip() const
+{
+	return 0.1f;
+}
+
+float FirstPersonCamera::GetFarClip() const
+{
+	return 1000.0f;
+}

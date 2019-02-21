@@ -1,4 +1,4 @@
-
+#define MAX_LIGHTS 24
 // Constant Buffer
 // - Allows us to define a buffer of individual variables 
 //    which will (eventually) hold data from our C++ code
@@ -11,6 +11,10 @@ cbuffer externalData : register(b0)
 	matrix itworld;
 	matrix view;
 	matrix projection;
+
+	matrix lView;
+
+	int lightCount;
 };
 
 // Struct representing a single vertex worth of data
@@ -43,11 +47,12 @@ struct VertexToPixel
 	//  |   Name          Semantic
 	//  |    |                |
 	//  v    v                v
-	float4 position		: SV_POSITION;	// XYZW position (System Value Position)
-	float4 worldPos		: POSITION;
-	float3 normal		: NORMAL;
-	float2 uv			: TEXCOORD;
-	float3 tangent		: TANGENT;
+	float4 position				: SV_POSITION;	// XYZW position (System Value Position)
+	float4 worldPos				: POSITION0;
+	float3 normal				: NORMAL;
+	float2 uv					: TEXCOORD;
+	float3 tangent				: TANGENT;
+	float4 lViewSpacePos		: POSITION1;
 };
 
 // --------------------------------------------------------
@@ -70,7 +75,7 @@ VertexToPixel main( VertexShaderInput input )
 	// First we multiply them together to get a single matrix which represents
 	// all of those transformations (world to view to projection space)
 	matrix worldViewProj = mul(mul(world, view), projection);
-
+	matrix lWorldView = mul(world, lView);
 	// Then we convert our 3-component position vector to a 4-component vector
 	// and multiply it by our final 4x4 matrix.
 	//
@@ -78,6 +83,8 @@ VertexToPixel main( VertexShaderInput input )
 	// screen and the distance (Z) from the camera (the "depth" of the pixel)
 	output.position = mul(float4(input.position, 1.0f), worldViewProj);
 	output.worldPos = mul(float4(input.position, 1.0f), world);
+
+	output.lViewSpacePos = mul(float4(input.position, 1.0f), lWorldView);
 
 	// Update the normal
 	output.normal = mul(input.normal, (float3x3)itworld);
