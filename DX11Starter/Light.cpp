@@ -14,9 +14,9 @@ Light::Light(LightStructure* data, ID3D11Device* d, ID3D11DeviceContext* c, Firs
 	sceneAABBMin = aabbMin;
 	sceneAABBMax = aabbMax;
 
-	m_iCascadePartitionsZeroToOne[0] = 3;
-	m_iCascadePartitionsZeroToOne[1] = 6;
-	m_iCascadePartitionsZeroToOne[2] = 15;
+	cascadePartitionsZeroToOne[0] = 3;
+	cascadePartitionsZeroToOne[1] = 6;
+	cascadePartitionsZeroToOne[2] = 15;
 
 	shadowMap = nullptr;
 	shadowDepthView = nullptr;
@@ -189,9 +189,9 @@ void Light::UpdateMatrices()
 
 void Light::CalculateDirectionalFrustumMatrices()
 {
-	const DirectX::XMVECTOR g_vFLTMAX = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
-	const DirectX::XMVECTOR g_vFLTMIN = { -FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX };
-	const DirectX::XMVECTOR g_vHalfVector = { 0.5f, 0.5f, 0.5f, 0.5f };
+	const DirectX::XMVECTOR FLTMAX = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
+	const DirectX::XMVECTOR FLTMIN = { -FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX };
+	const DirectX::XMVECTOR halfVector = { 0.5f, 0.5f, 0.5f, 0.5f };
 
 	const DirectX::XMVECTOR eyeDirection = DirectX::XMVector3Normalize(DirectX::XMLoadFloat3(&Data->Direction));
 	const DirectX::XMFLOAT3 cPos = camera->GetPosition();
@@ -217,58 +217,58 @@ void Light::CalculateDirectionalFrustumMatrices()
 	bb.GetCorners(tmp);
 
 	// Transform the scene AABB to Light space.
-	DirectX::XMVECTOR vSceneAABBPointsLightSpace[8];
+	DirectX::XMVECTOR sceneAABBPointsLightSpace[8];
 	for (int index = 0; index < 8; ++index)
 	{
 		DirectX::XMVECTOR v = XMLoadFloat3(&tmp[index]);
-		vSceneAABBPointsLightSpace[index] = XMVector3Transform(v, matLightCameraView);
+		sceneAABBPointsLightSpace[index] = XMVector3Transform(v, matLightCameraView);
 	}
 
-	float fFrustumIntervalBegin, fFrustumIntervalEnd;
-	DirectX::XMVECTOR vLightCameraOrthographicMin;  // light space frustum aabb 
-	DirectX::XMVECTOR vLightCameraOrthographicMax;
-	float fCameraNearFarRange = camera->GetFarClip() - camera->GetNearClip();
+	float frustumIntervalBegin, frustumIntervalEnd;
+	DirectX::XMVECTOR lightCameraOrthographicMin;  // light space frustum aabb 
+	DirectX::XMVECTOR lightCameraOrthographicMax;
+	float cameraNearFarRange = camera->GetFarClip() - camera->GetNearClip();
 
-	DirectX::XMVECTOR vWorldUnitsPerTexel = { 0.0f, 0.0f, 0.0f, 0.0f };
+	DirectX::XMVECTOR worldUnitsPerTexel = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-	for (int iCascadeIndex = 0; iCascadeIndex < 3; ++iCascadeIndex)
+	for (int cascadeIndex = 0; cascadeIndex < 3; ++cascadeIndex)
 	{
 		// Calculate the interval of the View Frustum that this cascade covers. We measure the interval 
 		// the cascade covers as a Min and Max distance along the Z Axis.
 
 		// Because we want to fit the orthogrpahic projection tightly around the Cascade, we set the Mimiumum cascade 
 		// value to the previous Frustum end Interval
-		if (iCascadeIndex == 0) fFrustumIntervalBegin = 0.0f;
-		else fFrustumIntervalBegin = float(m_iCascadePartitionsZeroToOne[iCascadeIndex - 1]);
+		if (cascadeIndex == 0) frustumIntervalBegin = 0.0f;
+		else frustumIntervalBegin = float(cascadePartitionsZeroToOne[cascadeIndex - 1]);
 
 
 		// Scale the intervals between 0 and 1. They are now percentages that we can scale with.
-		fFrustumIntervalEnd = float(m_iCascadePartitionsZeroToOne[iCascadeIndex]);
-		fFrustumIntervalBegin /= float(m_iCascadePartitionsMax);
-		fFrustumIntervalEnd /= float(m_iCascadePartitionsMax);
-		fFrustumIntervalBegin = fFrustumIntervalBegin * fCameraNearFarRange;
-		fFrustumIntervalEnd = fFrustumIntervalEnd * fCameraNearFarRange;
-		DirectX::XMVECTOR vFrustumPoints[8];
+		frustumIntervalEnd = float(cascadePartitionsZeroToOne[cascadeIndex]);
+		frustumIntervalBegin /= float(cascadePartitionsMax);
+		frustumIntervalEnd /= float(cascadePartitionsMax);
+		frustumIntervalBegin = frustumIntervalBegin * cameraNearFarRange;
+		frustumIntervalEnd = frustumIntervalEnd * cameraNearFarRange;
+		DirectX::XMVECTOR frustumPoints[8];
 
 		// This function takes the began and end intervals along with the projection matrix and returns the 8
 		// points that repreresent the cascade Interval
-		CreateFrustumPointsFromCascadeInterval(fFrustumIntervalBegin, fFrustumIntervalEnd,
-			matViewCameraProjection, vFrustumPoints);
+		CreateFrustumPointsFromCascadeInterval(frustumIntervalBegin, frustumIntervalEnd,
+			matViewCameraProjection, frustumPoints);
 
-		vLightCameraOrthographicMin = g_vFLTMAX;
-		vLightCameraOrthographicMax = g_vFLTMIN;
+		lightCameraOrthographicMin = FLTMAX;
+		lightCameraOrthographicMax = FLTMIN;
 
-		DirectX::XMVECTOR vTempTranslatedCornerPoint;
+		DirectX::XMVECTOR tempTranslatedCornerPoint;
 		// This next section of code calculates the min and max values for the orthographic projection.
 		for (int icpIndex = 0; icpIndex < 8; ++icpIndex)
 		{
 			// Transform the frustum from camera view space to world space.
-			vFrustumPoints[icpIndex] = XMVector4Transform(vFrustumPoints[icpIndex], matInverseViewCamera);
+			frustumPoints[icpIndex] = XMVector4Transform(frustumPoints[icpIndex], matInverseViewCamera);
 			// Transform the point from world space to Light Camera Space.
-			vTempTranslatedCornerPoint = XMVector4Transform(vFrustumPoints[icpIndex], matLightCameraView);
+			tempTranslatedCornerPoint = XMVector4Transform(frustumPoints[icpIndex], matLightCameraView);
 			// Find the closest point.
-			vLightCameraOrthographicMin = DirectX::XMVectorMin(vTempTranslatedCornerPoint, vLightCameraOrthographicMin);
-			vLightCameraOrthographicMax = DirectX::XMVectorMax(vTempTranslatedCornerPoint, vLightCameraOrthographicMax);
+			lightCameraOrthographicMin = DirectX::XMVectorMin(tempTranslatedCornerPoint, lightCameraOrthographicMin);
+			lightCameraOrthographicMax = DirectX::XMVectorMax(tempTranslatedCornerPoint, lightCameraOrthographicMax);
 		}
 
 		// This code removes the shimmering effect along the edges of shadows due to
@@ -281,61 +281,61 @@ void Light::CalculateDirectionalFrustumMatrices()
 		DirectX::XMVECTORF32 scaleDueToBlurAMTVec = { scaleDueToBlurAMT, scaleDueToBlurAMT, 0.0f, 0.0f };
 
 
-		float fNormalizeByBufferSize = (1.0f / float(shadowMapDimension));
-		DirectX::XMVECTOR vNormalizeByBufferSize = DirectX::XMVectorSet(fNormalizeByBufferSize, fNormalizeByBufferSize, 0.0f, 0.0f);
+		float normalizeByBufferSize = (1.0f / float(shadowMapDimension));
+		DirectX::XMVECTOR normalizeByBufferSizeVec = DirectX::XMVectorSet(normalizeByBufferSize, normalizeByBufferSize, 0.0f, 0.0f);
 
 		// We calculate the offsets as a percentage of the bound.
-		DirectX::XMVECTOR vBoarderOffset = DirectX::XMVectorSubtract(vLightCameraOrthographicMax, vLightCameraOrthographicMin);
-		vBoarderOffset = DirectX::XMVectorMultiply(vBoarderOffset, g_vHalfVector);
-		vBoarderOffset = DirectX::XMVectorMultiply(vBoarderOffset, scaleDueToBlurAMTVec);
-		vLightCameraOrthographicMax = DirectX::XMVectorAdd(vLightCameraOrthographicMax, vBoarderOffset);
-		vLightCameraOrthographicMin = DirectX::XMVectorSubtract(vLightCameraOrthographicMin, vBoarderOffset);
+		DirectX::XMVECTOR boarderOffset = DirectX::XMVectorSubtract(lightCameraOrthographicMax, lightCameraOrthographicMin);
+		boarderOffset = DirectX::XMVectorMultiply(boarderOffset, halfVector);
+		boarderOffset = DirectX::XMVectorMultiply(boarderOffset, scaleDueToBlurAMTVec);
+		lightCameraOrthographicMax = DirectX::XMVectorAdd(lightCameraOrthographicMax, boarderOffset);
+		lightCameraOrthographicMin = DirectX::XMVectorSubtract(lightCameraOrthographicMin, boarderOffset);
 
 		// The world units per texel are used to snap  the orthographic projection
 		// to texel sized increments.  
 		// Because we're fitting tighly to the cascades, the shimmering shadow edges will still be present when the 
 		// camera rotates.  However, when zooming in or strafing the shadow edge will not shimmer.
-		vWorldUnitsPerTexel = DirectX::XMVectorSubtract(vLightCameraOrthographicMax, vLightCameraOrthographicMin);
-		vWorldUnitsPerTexel = DirectX::XMVectorMultiply(vWorldUnitsPerTexel, vNormalizeByBufferSize);
+		worldUnitsPerTexel = DirectX::XMVectorSubtract(lightCameraOrthographicMax, lightCameraOrthographicMin);
+		worldUnitsPerTexel = DirectX::XMVectorMultiply(worldUnitsPerTexel, normalizeByBufferSizeVec);
 
-		float fLightCameraOrthographicMinZ = DirectX::XMVectorGetZ(vLightCameraOrthographicMin);
+		float lightCameraOrthographicMinZ = DirectX::XMVectorGetZ(lightCameraOrthographicMin);
 
 		// We snap the camera to 1 pixel increments so that moving the camera does not cause the shadows to jitter.
 		// This is a matter of integer dividing by the world space size of a texel
-		vLightCameraOrthographicMin = DirectX::XMVectorDivide(vLightCameraOrthographicMin, vWorldUnitsPerTexel);
-		vLightCameraOrthographicMin = DirectX::XMVectorFloor(vLightCameraOrthographicMin);
-		vLightCameraOrthographicMin = DirectX::XMVectorMultiply(vLightCameraOrthographicMin, vWorldUnitsPerTexel);
+		lightCameraOrthographicMin = DirectX::XMVectorDivide(lightCameraOrthographicMin, worldUnitsPerTexel);
+		lightCameraOrthographicMin = DirectX::XMVectorFloor(lightCameraOrthographicMin);
+		lightCameraOrthographicMin = DirectX::XMVectorMultiply(lightCameraOrthographicMin, worldUnitsPerTexel);
 
-		vLightCameraOrthographicMax = DirectX::XMVectorDivide(vLightCameraOrthographicMax, vWorldUnitsPerTexel);
-		vLightCameraOrthographicMax = DirectX::XMVectorFloor(vLightCameraOrthographicMax);
-		vLightCameraOrthographicMax = DirectX::XMVectorMultiply(vLightCameraOrthographicMax, vWorldUnitsPerTexel);
+		lightCameraOrthographicMax = DirectX::XMVectorDivide(lightCameraOrthographicMax, worldUnitsPerTexel);
+		lightCameraOrthographicMax = DirectX::XMVectorFloor(lightCameraOrthographicMax);
+		lightCameraOrthographicMax = DirectX::XMVectorMultiply(lightCameraOrthographicMax, worldUnitsPerTexel);
 
 
 		// These are the unconfigured near and far plane values. They are purposely awful to show 
 		// how important calculating accurate near and far planes is.
-		float fNearPlane = 0.0f;
-		float fFarPlane = 10000.0f;
+		float nearPlane = 0.0f;
+		float farPlane = 10000.0f;
 
-		DirectX::XMVECTOR vLightSpaceSceneAABBminValue = g_vFLTMAX;  // world space scene aabb 
-		DirectX::XMVECTOR vLightSpaceSceneAABBmaxValue = g_vFLTMIN;
+		DirectX::XMVECTOR lightSpaceSceneAABBminValue = FLTMAX;  // world space scene aabb 
+		DirectX::XMVECTOR lightSpaceSceneAABBmaxValue = FLTMIN;
 		// We calculate the min and max vectors of the scene in light space. The min and max "Z" values of the  
 		// light space AABB can be used for the near and far plane. This is easier than intersecting the scene with the AABB
 		// and in some cases provides similar results.
 		for (int index = 0; index < 8; ++index)
 		{
-			vLightSpaceSceneAABBminValue = DirectX::XMVectorMin(vSceneAABBPointsLightSpace[index], vLightSpaceSceneAABBminValue);
-			vLightSpaceSceneAABBmaxValue = DirectX::XMVectorMax(vSceneAABBPointsLightSpace[index], vLightSpaceSceneAABBmaxValue);
+			lightSpaceSceneAABBminValue = DirectX::XMVectorMin(sceneAABBPointsLightSpace[index], lightSpaceSceneAABBminValue);
+			lightSpaceSceneAABBmaxValue = DirectX::XMVectorMax(sceneAABBPointsLightSpace[index], lightSpaceSceneAABBmaxValue);
 		}
 
 		// The min and max z values are the near and far planes.
-		fNearPlane = DirectX::XMVectorGetZ(vLightSpaceSceneAABBminValue);
-		fFarPlane = DirectX::XMVectorGetZ(vLightSpaceSceneAABBmaxValue);
+		nearPlane = DirectX::XMVectorGetZ(lightSpaceSceneAABBminValue);
+		farPlane = DirectX::XMVectorGetZ(lightSpaceSceneAABBmaxValue);
 		// Create the orthographic projection for this cascade.
-		projection[iCascadeIndex] = DirectX::XMMatrixOrthographicOffCenterLH(DirectX::XMVectorGetX(vLightCameraOrthographicMin), DirectX::XMVectorGetX(vLightCameraOrthographicMax),
-			DirectX::XMVectorGetY(vLightCameraOrthographicMin), DirectX::XMVectorGetY(vLightCameraOrthographicMax),
-			fNearPlane, fFarPlane);
-		projection[iCascadeIndex] = DirectX::XMMatrixTranspose(projection[iCascadeIndex]);
-		m_fCascadePartitionsFrustum[iCascadeIndex] = fFrustumIntervalEnd;
+		projection[cascadeIndex] = DirectX::XMMatrixOrthographicOffCenterLH(DirectX::XMVectorGetX(lightCameraOrthographicMin), DirectX::XMVectorGetX(lightCameraOrthographicMax),
+			DirectX::XMVectorGetY(lightCameraOrthographicMin), DirectX::XMVectorGetY(lightCameraOrthographicMax),
+			nearPlane, farPlane);
+		projection[cascadeIndex] = DirectX::XMMatrixTranspose(projection[cascadeIndex]);
+		cascadePartitionsFrustum[cascadeIndex] = frustumIntervalEnd;
 	}
 }
 

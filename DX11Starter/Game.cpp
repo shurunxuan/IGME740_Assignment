@@ -147,7 +147,7 @@ void Game::Init()
 	entities[0]->SetTranslation(XMFLOAT3(0.0f, 1.0f, 0.0f));
 
 	entities[entityCount - 1] = new GameEntity(modelData2.first);
-	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 100.0f, 100.0f));
+	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 10.0f, 10.0f));
 	XMFLOAT3 zAxis{ 0.0f, 0.0f, 1.0f };
 	XMFLOAT4 q{};
 	XMVECTOR z = XMLoadFloat3(&zAxis);
@@ -218,8 +218,8 @@ void Game::Init()
 	}
 
 	// Get the AABB bounding box of the scene
-	XMVECTOR vMeshMin;
-	XMVECTOR vMeshMax;
+	XMVECTOR meshMin;
+	XMVECTOR meshMax;
 	sceneAABBMin = { FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX };
 	sceneAABBMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX, -FLT_MAX };
 	// Calculate the AABB for the scene by iterating through all the meshes in the SDKMesh file.
@@ -244,18 +244,18 @@ void Game::Init()
 			BoundingBox::CreateFromPoints(bb, min, max);
 			bb.Transform(bb, mat);
 
-			vMeshMin = XMVectorSet(bb.Center.x - bb.Extents.x,
+			meshMin = XMVectorSet(bb.Center.x - bb.Extents.x,
 				bb.Center.y - bb.Extents.y,
 				bb.Center.z - bb.Extents.z,
 				1.0f);
 
-			vMeshMax = XMVectorSet(bb.Center.x + bb.Extents.x,
+			meshMax = XMVectorSet(bb.Center.x + bb.Extents.x,
 				bb.Center.y + bb.Extents.y,
 				bb.Center.z + bb.Extents.z,
 				1.0f);
 
-			sceneAABBMin = XMVectorMin(vMeshMin, sceneAABBMin);
-			sceneAABBMax = XMVectorMax(vMeshMax, sceneAABBMax);
+			sceneAABBMin = XMVectorMin(meshMin, sceneAABBMin);
+			sceneAABBMax = XMVectorMax(meshMax, sceneAABBMax);
 		}
 	}
 
@@ -387,7 +387,7 @@ void Game::Init()
 
 	D3D11_RASTERIZER_DESC shadowRenderStateDesc;
 	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
-	shadowRenderStateDesc.CullMode = D3D11_CULL_BACK;
+	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
 	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
 	shadowRenderStateDesc.DepthBias = 100;
 	shadowRenderStateDesc.DepthBiasClamp = 0.1f;
@@ -432,7 +432,7 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
 		XMVECTOR yVec = XMLoadFloat3(&yAxis);
-		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime / 3.0f);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
 		XMVECTOR lightDirection = XMLoadFloat3(&lightData[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMFLOAT3 newLightDirection{};
@@ -775,39 +775,39 @@ void Game::Draw(float deltaTime, float totalTime)
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("lView", lViewMat);
 				if (!result) LOG_WARNING << "Error setting parameter " << "lView" << " to vertex shader. Variable." << std::endl;
 
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopStart", 3 / -2);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iPCFBlurForLoopEnd", 3 / 2 + 1);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fCascadeBlendArea", cascadeBlendArea);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fTexelSize", 1.0f / 2048.0f);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fNativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowBiasFromGUI", 0);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fShadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopStart", 3 / -2);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopEnd", 3 / 2 + 1);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("cascadeBlendArea", cascadeBlendArea);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("texelSize", 1.0f / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("nativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shadowBias", 0);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("shadowPartitionSize", 1.0f / lights[0]->GetCascadeCount());
 
 				XMMATRIX matTextureScale = XMMatrixScaling(0.5f, -0.5f, 1.0f);
 				XMMATRIX matTextureTranslation = XMMatrixTranslation(.5f, .5f, 0.f);
 
-				XMFLOAT4 m_vCascadeScale[3];
-				XMFLOAT4 m_vCascadeOffset[3];
+				XMFLOAT4 cascadeScale[3];
+				XMFLOAT4 cascadeOffset[3];
 				for (int index = 0; index < lights[0]->GetCascadeCount(); ++index)
 				{
 					XMMATRIX mShadowTexture = XMMatrixTranspose(lights[0]->GetProjectionMatrixAt(index)) * matTextureScale * matTextureTranslation;
-					m_vCascadeScale[index].x = XMVectorGetX(mShadowTexture.r[0]);
-					m_vCascadeScale[index].y = XMVectorGetY(mShadowTexture.r[1]);
-					m_vCascadeScale[index].z = XMVectorGetZ(mShadowTexture.r[2]);
-					m_vCascadeScale[index].w = 1;
+					cascadeScale[index].x = XMVectorGetX(mShadowTexture.r[0]);
+					cascadeScale[index].y = XMVectorGetY(mShadowTexture.r[1]);
+					cascadeScale[index].z = XMVectorGetZ(mShadowTexture.r[2]);
+					cascadeScale[index].w = 1;
 
-					XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&m_vCascadeOffset[index]), mShadowTexture.r[3]);
-					m_vCascadeOffset[index].w = 0;
+					XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&cascadeOffset[index]), mShadowTexture.r[3]);
+					cascadeOffset[index].w = 0;
 				}
 
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("m_vCascadeOffset", &m_vCascadeOffset, sizeof(XMFLOAT4) * 3);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("m_vCascadeScale", &m_vCascadeScale, sizeof(XMFLOAT4) * 3);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("cascadeOffset", &cascadeOffset, sizeof(XMFLOAT4) * 3);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetData("cascadeScale", &cascadeScale, sizeof(XMFLOAT4) * 3);
 
 				// The border padding values keep the pixel shader from reading the borders during PCF filtering.
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fMaxBorderPadding", (2048.0f - 1.0f) / 2048.0f);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("m_fMinBorderPadding", (1.0f) / 2048.0f);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_nCascadeLevels", lights[0]->GetCascadeCount());
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("m_iVisualizeCascades", visualizeCascade ? 1 : 0);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("maxBorderPadding", (2048.0f - 1.0f) / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("minBorderPadding", (1.0f) / 2048.0f);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("cascadeLevels", lights[0]->GetCascadeCount());
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("visualizeCascades", visualizeCascade ? 1 : 0);
 
 				//result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetMatrix4x4("cascadeProjection", lProjMat);
 				//if (!result) LOG_WARNING << "Error setting parameter " << "cascadeProjection" << " to pixel shader. Variable not found." << std::endl;

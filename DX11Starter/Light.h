@@ -71,9 +71,9 @@ private:
 	DirectX::XMVECTOR sceneAABBMax;
 
 	// Shadow map cascades
-	int m_iCascadePartitionsMax = 500;
-	float m_fCascadePartitionsFrustum[3]; // Values are  between near and far
-	int m_iCascadePartitionsZeroToOne[3]; // Values are 0 to 100 and represent a percent of the frustum
+	int cascadePartitionsMax = 500;
+	float cascadePartitionsFrustum[3]; // Values are  between near and far
+	int cascadePartitionsZeroToOne[3]; // Values are 0 to 100 and represent a percent of the frustum
 
 	void CalculateDirectionalFrustumMatrices();
 	void CreateFrustumPointsFromCascadeInterval(float fCascadeIntervalBegin,
