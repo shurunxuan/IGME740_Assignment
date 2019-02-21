@@ -69,6 +69,11 @@ protected:
 	ID3D11RenderTargetView* backBufferRTV;
 	ID3D11DepthStencilView* depthStencilView;
 
+	// Render target before post-processing
+	ID3D11Texture2D* renderTexture;
+	ID3D11RenderTargetView* renderTargetView;
+	ID3D11ShaderResourceView* renderResourseView;
+
 	// Helper function for allocating a console window
 	void CreateConsoleWindow(int bufferLines, int bufferColumns, int windowLines, int windowColumns);
 
