@@ -256,11 +256,16 @@ HRESULT DXCore::InitDirectX()
 	// Create Shader Resource View with the renderTexture
 	D3D11_SHADER_RESOURCE_VIEW_DESC renderSRVDesc;
 	ZeroMemory(&renderSRVDesc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
-	//renderSRVDesc.
-	//device->CreateShaderResourceView(
-	//	renderTexture,
+	renderSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	renderSRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	renderSRVDesc.Texture2D.MipLevels = 1;
 
-	//);
+	device->CreateShaderResourceView(
+		renderTexture,
+		&renderSRVDesc,
+		&renderResourseView
+	);
+
 	// Set up the description of the texture to use for the depth buffer
 	D3D11_TEXTURE2D_DESC depthStencilDesc = {};
 	depthStencilDesc.Width				= width;
