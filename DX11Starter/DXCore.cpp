@@ -58,7 +58,7 @@ DXCore::DXCore(
 	depthStencilView = 0;
 
 	renderTargetView = 0;
-	renderResourseView = 0;
+	renderResourceView = 0;
 
 	// Query performance counter for accurate timing information
 	__int64 perfFreq;
@@ -76,7 +76,9 @@ DXCore::~DXCore()
 	if (backBufferRTV) { backBufferRTV->Release(); }
 
 	if (renderTargetView) { renderTargetView->Release(); }
-	if (renderResourseView) { renderResourseView->Release(); }
+	if (renderResourceView) { renderResourceView->Release(); }
+
+	if (postProcessingSamplerState) { postProcessingSamplerState->Release(); }
 
 	if (swapChain) { swapChain->Release(); }
 	if (context) { context->Release(); }
@@ -243,6 +245,7 @@ HRESULT DXCore::InitDirectX()
 	ID3D11Texture2D* renderTexture = nullptr;
 	ZeroMemory(&renderTexDesc, sizeof(D3D11_TEXTURE2D_DESC));
 	backBufferTexture->GetDesc(&renderTexDesc);
+	renderTexDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 	device->CreateTexture2D(&renderTexDesc, nullptr, &renderTexture);
 
 	// Create Render Target View with the renderTexture
@@ -262,11 +265,23 @@ HRESULT DXCore::InitDirectX()
 	device->CreateShaderResourceView(
 		renderTexture,
 		&renderSRVDesc,
-		&renderResourseView
+		&renderResourceView
 	);
 
 	// Release the render target texture because we don't need it anymore
 	renderTexture->Release();
+
+	// Create sampler for sampling the render texture
+	D3D11_SAMPLER_DESC samplerDesc;
+	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
+
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	device->CreateSamplerState(&samplerDesc, &postProcessingSamplerState);
 
 	// Set up the description of the texture to use for the depth buffer
 	D3D11_TEXTURE2D_DESC depthStencilDesc = {};
@@ -336,6 +351,37 @@ void DXCore::OnResize()
 	swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBufferTexture));
 	device->CreateRenderTargetView(backBufferTexture, 0, &backBufferRTV);
 	backBufferTexture->Release();
+
+	// Get the description of backBufferTexture and apply it to the renderTexture
+	D3D11_TEXTURE2D_DESC renderTexDesc;
+	ID3D11Texture2D* renderTexture = nullptr;
+	ZeroMemory(&renderTexDesc, sizeof(D3D11_TEXTURE2D_DESC));
+	backBufferTexture->GetDesc(&renderTexDesc);
+	renderTexDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+	device->CreateTexture2D(&renderTexDesc, nullptr, &renderTexture);
+
+	// Create Render Target View with the renderTexture
+	device->CreateRenderTargetView(
+		renderTexture,
+		nullptr,
+		&renderTargetView
+	);
+
+	// Create Shader Resource View with the renderTexture
+	D3D11_SHADER_RESOURCE_VIEW_DESC renderSRVDesc;
+	ZeroMemory(&renderSRVDesc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+	renderSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	renderSRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	renderSRVDesc.Texture2D.MipLevels = 1;
+
+	device->CreateShaderResourceView(
+		renderTexture,
+		&renderSRVDesc,
+		&renderResourceView
+	);
+
+	// Release the render target texture because we don't need it anymore
+	renderTexture->Release();
 
 	// Set up the description of the texture to use for the depth buffer
 	D3D11_TEXTURE2D_DESC depthStencilDesc;

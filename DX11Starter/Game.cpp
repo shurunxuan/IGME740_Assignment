@@ -965,13 +965,31 @@ void Game::Draw(float deltaTime, float totalTime)
 #pragma endregion 
 
 #pragma region PostProcessing
-
+	context->ClearDepthStencilView(
+		depthStencilView,
+		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+		1.0f,
+		0);
 	// Render to screen
 	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
 	// Set texture
-	postProcessingPixelShader->SetSamplerState("basicSampler", )
+	postProcessingPixelShader->SetSamplerState("basicSampler", postProcessingSamplerState);
+	postProcessingPixelShader->SetShaderResourceView("renderTexture", renderResourceView);
 
+	// Copy all buffer data
+	postProcessingPixelShader->CopyAllBufferData();
+	postProcessingVertexShader->CopyAllBufferData();
+
+	// Set shader
+	postProcessingVertexShader->SetShader();
+	postProcessingPixelShader->SetShader();
+
+	// Draw
+	context->Draw(3, 0);
+
+	// Unbind texture
+	postProcessingPixelShader->SetShaderResourceView("renderTexture", nullptr);
 #pragma endregion 
 
 

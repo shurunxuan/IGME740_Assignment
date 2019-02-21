@@ -71,7 +71,8 @@ protected:
 
 	// Render target before post-processing
 	ID3D11RenderTargetView* renderTargetView;
-	ID3D11ShaderResourceView* renderResourseView;
+	ID3D11ShaderResourceView* renderResourceView;
+	ID3D11SamplerState* postProcessingSamplerState;
 
 	// Helper function for allocating a console window
 	void CreateConsoleWindow(int bufferLines, int bufferColumns, int windowLines, int windowColumns);
