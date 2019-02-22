@@ -974,7 +974,8 @@ void Game::Draw(float deltaTime, float totalTime)
 	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
 	// Set texture
-	postProcessingPixelShader->SetSamplerState("basicSampler", postProcessingSamplerState);
+	postProcessingPixelShader->SetSamplerState("pointSampler", pointSamplerState);
+	postProcessingPixelShader->SetSamplerState("linearSampler", linearSamplerState);
 	postProcessingPixelShader->SetShaderResourceView("renderTexture", renderResourceView);
 
 	// Copy all buffer data

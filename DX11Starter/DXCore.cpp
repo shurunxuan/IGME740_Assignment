@@ -78,7 +78,8 @@ DXCore::~DXCore()
 	if (renderTargetView) { renderTargetView->Release(); }
 	if (renderResourceView) { renderResourceView->Release(); }
 
-	if (postProcessingSamplerState) { postProcessingSamplerState->Release(); }
+	if (pointSamplerState) { pointSamplerState->Release(); }
+	if (linearSamplerState) { linearSamplerState->Release(); }
 
 	if (swapChain) { swapChain->Release(); }
 	if (context) { context->Release(); }
@@ -281,7 +282,11 @@ HRESULT DXCore::InitDirectX()
 	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
 	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
-	device->CreateSamplerState(&samplerDesc, &postProcessingSamplerState);
+	device->CreateSamplerState(&samplerDesc, &pointSamplerState);
+
+	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+
+	device->CreateSamplerState(&samplerDesc, &linearSamplerState);
 
 	// Set up the description of the texture to use for the depth buffer
 	D3D11_TEXTURE2D_DESC depthStencilDesc = {};
@@ -336,6 +341,9 @@ void DXCore::OnResize()
 	// Release existing DirectX views and buffers
 	if (depthStencilView) { depthStencilView->Release(); }
 	if (backBufferRTV) { backBufferRTV->Release(); }
+
+	if (renderTargetView) { renderTargetView->Release(); }
+	if (renderResourceView) { renderResourceView->Release(); }
 
 	// Resize the underlying swap chain buffers
 	swapChain->ResizeBuffers(
