@@ -410,7 +410,7 @@ PixelOutput main(VertexToPixel input)
         float4 visualizeCascadeColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
         if (i == 0)
         {
-            // Only cast shadow for light 0
+            //// Only cast shadow for light 0
             //float2 shadowTexCoords;
             //float4 lSpacePos = mul(input.lViewSpacePos, cascadeProjection);
             //shadowTexCoords.x = 0.5f + (lSpacePos.x / lSpacePos.w * 0.5f);
@@ -541,6 +541,7 @@ PixelOutput main(VertexToPixel input)
 
         float4 lightColor = float4(lights[i].Color.xyz, 0.0);
         intensity = saturate(intensity * spotAmount) * lighting;
+        //intensity = saturate(intensity * spotAmount);
 
         float diffuseFactor = NdL;
         float4 specularColor = NdL * float4(GGX(n, l, v), 0.0f) * lightColor * intensity;
@@ -548,7 +549,7 @@ PixelOutput main(VertexToPixel input)
         specular += specularColor;
 
         float3 diffuseColor = DiffuseEnergyConserve(diffuseFactor, specularColor.xyz, material.metalness) * visualizeCascadeColor.xyz;
-        diffuse += float4(diffuseColor, 0.0) * lightColor * intensity;
+        diffuse += float4(diffuseColor, 0.0) * lightColor * saturate(intensity * spotAmount);
 
     }
 

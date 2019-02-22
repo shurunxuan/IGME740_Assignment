@@ -173,6 +173,7 @@ void Game::Init()
 
 	entities[entityCount - 1] = new GameEntity(modelData2.first);
 	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 10.0f, 10.0f));
+	entities[entityCount - 1]->SetTranslation(XMFLOAT3{ 0.0f, -0.01f, 0.0f });
 	XMFLOAT3 zAxis{ 0.0f, 0.0f, 1.0f };
 	XMFLOAT4 q{};
 	XMVECTOR z = XMLoadFloat3(&zAxis);
@@ -415,8 +416,8 @@ void Game::Init()
 	ZeroMemory(&shadowRenderStateDesc, sizeof(D3D11_RASTERIZER_DESC));
 	shadowRenderStateDesc.CullMode = D3D11_CULL_FRONT;
 	shadowRenderStateDesc.FillMode = D3D11_FILL_SOLID;
-	shadowRenderStateDesc.DepthBias = 100;
-	shadowRenderStateDesc.DepthBiasClamp = 0.1f;
+	shadowRenderStateDesc.DepthBias = 1000;
+	shadowRenderStateDesc.DepthBiasClamp = 0.0f;
 	shadowRenderStateDesc.SlopeScaledDepthBias = 1.0f;
 	shadowRenderStateDesc.DepthClipEnable = true;
 
@@ -803,8 +804,8 @@ void Game::Draw(float deltaTime, float totalTime)
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetVertexShaderPtr()->SetMatrix4x4("lView", lViewMat);
 				if (!result) LOG_WARNING << "Error setting parameter " << "lView" << " to vertex shader. Variable." << std::endl;
 
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopStart", 3 / -2);
-				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopEnd", 3 / 2 + 1);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopStart", PCF_BLUR_COUNT / -2);
+				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetInt("pcfBlurForLoopEnd", PCF_BLUR_COUNT / 2 + 1);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("cascadeBlendArea", cascadeBlendArea);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("texelSize", 1.0f / 2048.0f);
 				result = entities[i]->GetMeshAt(j)->GetMaterial()->GetPixelShaderPtr()->SetFloat("nativeTexelSizeInX", 1.0f / 2048.0f / lights[0]->GetCascadeCount());
@@ -818,13 +819,13 @@ void Game::Draw(float deltaTime, float totalTime)
 				XMFLOAT4 cascadeOffset[3];
 				for (int index = 0; index < lights[0]->GetCascadeCount(); ++index)
 				{
-					XMMATRIX mShadowTexture = XMMatrixTranspose(lights[0]->GetProjectionMatrixAt(index)) * matTextureScale * matTextureTranslation;
-					cascadeScale[index].x = XMVectorGetX(mShadowTexture.r[0]);
-					cascadeScale[index].y = XMVectorGetY(mShadowTexture.r[1]);
-					cascadeScale[index].z = XMVectorGetZ(mShadowTexture.r[2]);
+					XMMATRIX shadowTexture = XMMatrixTranspose(lights[0]->GetProjectionMatrixAt(index)) * matTextureScale * matTextureTranslation;
+					cascadeScale[index].x = XMVectorGetX(shadowTexture.r[0]);
+					cascadeScale[index].y = XMVectorGetY(shadowTexture.r[1]);
+					cascadeScale[index].z = XMVectorGetZ(shadowTexture.r[2]);
 					cascadeScale[index].w = 1;
 
-					XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&cascadeOffset[index]), mShadowTexture.r[3]);
+					XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(&cascadeOffset[index]), shadowTexture.r[3]);
 					cascadeOffset[index].w = 0;
 				}
 

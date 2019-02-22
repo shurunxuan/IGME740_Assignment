@@ -66,7 +66,7 @@ VertexToPixel main( VertexShaderInput input )
 {
 	// Set up output struct
 	VertexToPixel output;
-
+    input.normal = normalize(input.normal);
 	// The vertex's position (input.position) must be converted to world space,
 	// then camera space (relative to our 3D camera), then to proper homogenous 
 	// screen-space coordinates.  This is taken care of by our world, view and
@@ -84,7 +84,7 @@ VertexToPixel main( VertexShaderInput input )
 	output.position = mul(float4(input.position, 1.0f), worldViewProj);
 	output.worldPos = mul(float4(input.position, 1.0f), world);
 
-	output.lViewSpacePos = mul(float4(input.position, 1.0f), lWorldView);
+    output.lViewSpacePos = mul(float4(input.position + input.normal * 0.05f, 1.0f), lWorldView);
 
 	// Update the normal
 	output.normal = mul(input.normal, (float3x3)itworld);

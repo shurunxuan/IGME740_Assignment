@@ -276,7 +276,7 @@ void Light::CalculateDirectionalFrustumMatrices()
 
 		// We calculate a looser bound based on the size of the PCF blur.  This ensures us that we're 
 		// sampling within the correct map.
-		float scaleDueToBlurAMT = (float(3 * 2 + 1)
+		float scaleDueToBlurAMT = (float(PCF_BLUR_COUNT * 2 + 1)
 			/ float(shadowMapDimension));
 		DirectX::XMVECTORF32 scaleDueToBlurAMTVec = { scaleDueToBlurAMT, scaleDueToBlurAMT, 0.0f, 0.0f };
 
