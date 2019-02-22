@@ -154,7 +154,7 @@ float4 FresnelSchlick(float4 f0, float fd90, float view)
     return f0 + (fd90 - f0) * pow(max(1.0f - view, 0.1f), 5.0f);
 }
 
-float3 IBL(float3 n, float3 v, float3 l)
+float3 IBL(float3 n, float3 v, float3 l, float3 surfaceColor)
 {
     float3 r = normalize(reflect(-v, n));
     float NdV = max(dot(n, v), 0.0);
@@ -170,8 +170,9 @@ float3 IBL(float3 n, float3 v, float3 l)
     float4 specularColor = float4(lerp(0.04f.rrr, material.albedo, material.metalness), 1.0f);
     float4 schlickFresnel = saturate(FresnelSchlick(specularColor, 1.0f, NdV));
 
-    float3 diffuseResult = diffuseImageLighting * material.albedo;
-    float3 result = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel.xyz);
+    float3 albedo = material.albedo * surfaceColor;
+
+    float3 result = lerp(diffuseImageLighting * albedo, specularImageLighting * albedo, schlickFresnel.xyz);
     //float3 result = specularImageLighting * material.albedo;
 
     return result;
@@ -551,7 +552,7 @@ PixelOutput main(VertexToPixel input)
 
     }
 
-    result = surfaceColor * diffuse + specular + float4(IBL(n, v, l), 0.0f);
+    result = surfaceColor * diffuse + specular + float4(IBL(n, v, l, surfaceColor.rgb), 0.0f);
     result.w = surfaceColor.w;
 
     output.Target0 = saturate(result);

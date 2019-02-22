@@ -157,7 +157,7 @@ void Game::Init()
 	entities = new GameEntity *[entityCount];
 
 	// Create GameEntity & Initial Transform
-	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
+	const auto modelData1 = Mesh::LoadFromFile("models\\Groudon\\0.obj", device, context);
 	const auto modelData2 = Mesh::LoadFromFile("models\\Rock\\quad.obj", device, context);
 
 	//for (int i = 0; i < 10; ++i)
@@ -168,8 +168,8 @@ void Game::Init()
 	//	entities[10 * i + j]->SetTranslation(XMFLOAT3(3.0f * (j - 9.0f / 2.0f), 1.0f, 3.0f * (i - 9.0f / 2.0f)));
 	//}
 	entities[0] = new GameEntity(modelData1.first);
-	entities[0]->SetScale(XMFLOAT3(1.0f, 1.0f, 1.0f));
-	entities[0]->SetTranslation(XMFLOAT3(0.0f, 1.0f, 0.0f));
+	entities[0]->SetScale(XMFLOAT3(0.005f, 0.005f, 0.005f));
+	entities[0]->SetTranslation(XMFLOAT3(0.0f, 0.0f, 0.0f));
 
 	entities[entityCount - 1] = new GameEntity(modelData2.first);
 	entities[entityCount - 1]->SetScale(XMFLOAT3(1.0f, 10.0f, 10.0f));
@@ -190,7 +190,8 @@ void Game::Init()
 		// Test the new BRDF Material
 		std::shared_ptr<BrdfMaterial> brdfMaterial = std::make_shared<BrdfMaterial>(vertexShader, brdfPixelShader, device);
 		// Gold
-		brdfMaterial->parameters.albedo = { 1.000000f, 0.765557f, 0.336057f };
+		brdfMaterial->parameters.albedo = { 1.0f, 1.0f, 1.0f };
+		//brdfMaterial->parameters.albedo = { 1.000000f, 0.765557f, 0.336057f };
 		brdfMaterial->parameters.roughness = 0.5f;
 		brdfMaterial->parameters.metalness = 0.1f;
 		ID3D11Resource* resource;
