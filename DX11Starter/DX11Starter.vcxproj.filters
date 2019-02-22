@@ -120,7 +120,19 @@
     <FxCompile Include="PostProcessingVS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="PostProcessingPS.hlsl">
+    <FxCompile Include="PPDarkCornerPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PPGaussianBlurUPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PPGaussianBlurVPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PPAddPS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="PPCopyPS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

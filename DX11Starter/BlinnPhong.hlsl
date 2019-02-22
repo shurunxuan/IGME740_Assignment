@@ -71,7 +71,7 @@ SamplerState basicSampler : register(s0);
 // --------------------------------------------------------
 float4 main(VertexToPixel input) : SV_TARGET
 {
-	float3 v = normalize(CameraPosition - input.worldPos);
+	float3 v = normalize(CameraPosition - input.worldPos.xyz);
 	float3 n = normalize(input.normal);
 	float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
 	float3 b = normalize(cross(n, t));

@@ -45,6 +45,10 @@ private:
 	ID3D11RasterizerState* shadowRenderState;
 	ID3D11SamplerState* comparisonSampler;
 
+	// Function for post processing
+	void PostRender(int resourceIndex, int targetIndex, SimplePixelShader* pixelShader, const std::vector<std::pair<std::string, std::pair<void*, unsigned>>>& data = std::vector<std::pair<std::string, std::pair<void*, unsigned>>>());
+	void PostRenderAdd(int resourceIndex0, int resourceIndex1, int targetIndex);
+	void PostRenderCopy(int resourceIndex, int targetIndex, float xScale = 1.0f, float yScale = 1.0f);
 
 	// Wrappers for DirectX shaders to provide simplified functionality
 	SimpleVertexShader* vertexShader;
@@ -53,7 +57,11 @@ private:
 	SimpleVertexShader* skyboxVertexShader;
 	SimplePixelShader* skyboxPixelShader;
 	SimpleVertexShader* postProcessingVertexShader;
-	SimplePixelShader* postProcessingPixelShader;
+	SimplePixelShader* ppAddShader;
+	SimplePixelShader* ppCopyShader;
+	SimplePixelShader* ppDarkCornerShader;
+	SimplePixelShader* ppGaussianBlurUShader;
+	SimplePixelShader* ppGaussianBlurVShader;
 
 	// Keeps track of the old mouse position.  Useful for 
 	// determining how far the mouse moved in a single frame.

@@ -57,8 +57,11 @@ DXCore::DXCore(
 	backBufferRTV = 0;
 	depthStencilView = 0;
 
-	renderTargetView = 0;
-	renderResourceView = 0;
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+	{
+		renderTargetView[i] = 0;
+		renderResourceView[i] = 0;
+	}
 
 	// Query performance counter for accurate timing information
 	__int64 perfFreq;
@@ -74,9 +77,11 @@ DXCore::~DXCore()
 	// Release all DirectX resources
 	if (depthStencilView) { depthStencilView->Release(); }
 	if (backBufferRTV) { backBufferRTV->Release(); }
-
-	if (renderTargetView) { renderTargetView->Release(); }
-	if (renderResourceView) { renderResourceView->Release(); }
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+	{
+		if (renderTargetView[i]) { renderTargetView[i]->Release(); }
+		if (renderResourceView[i]) { renderResourceView[i]->Release(); }
+	}
 
 	if (pointSamplerState) { pointSamplerState->Release(); }
 	if (linearSamplerState) { linearSamplerState->Release(); }
@@ -243,18 +248,20 @@ HRESULT DXCore::InitDirectX()
 
 	// Get the description of backBufferTexture and apply it to the renderTexture
 	D3D11_TEXTURE2D_DESC renderTexDesc;
-	ID3D11Texture2D* renderTexture = nullptr;
+	ID3D11Texture2D* renderTexture[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = { nullptr };
 	ZeroMemory(&renderTexDesc, sizeof(D3D11_TEXTURE2D_DESC));
 	backBufferTexture->GetDesc(&renderTexDesc);
 	renderTexDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
-	device->CreateTexture2D(&renderTexDesc, nullptr, &renderTexture);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateTexture2D(&renderTexDesc, nullptr, renderTexture + i);
 
 	// Create Render Target View with the renderTexture
-	device->CreateRenderTargetView(
-		renderTexture,
-		nullptr,
-		&renderTargetView
-	);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateRenderTargetView(
+			renderTexture[i],
+			nullptr,
+			renderTargetView + i
+		);
 
 	// Create Shader Resource View with the renderTexture
 	D3D11_SHADER_RESOURCE_VIEW_DESC renderSRVDesc;
@@ -263,22 +270,24 @@ HRESULT DXCore::InitDirectX()
 	renderSRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	renderSRVDesc.Texture2D.MipLevels = 1;
 
-	device->CreateShaderResourceView(
-		renderTexture,
-		&renderSRVDesc,
-		&renderResourceView
-	);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateShaderResourceView(
+			renderTexture[i],
+			&renderSRVDesc,
+			renderResourceView + i
+		);
 
 	// Release the render target texture because we don't need it anymore
-	renderTexture->Release();
+	for (auto& i : renderTexture)
+		i->Release();
 
 	// Create sampler for sampling the render texture
 	D3D11_SAMPLER_DESC samplerDesc;
 	ZeroMemory(&samplerDesc, sizeof(samplerDesc));
 
-	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_MIRROR;
+	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_MIRROR;
+	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;
 	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
 	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
@@ -342,8 +351,11 @@ void DXCore::OnResize()
 	if (depthStencilView) { depthStencilView->Release(); }
 	if (backBufferRTV) { backBufferRTV->Release(); }
 
-	if (renderTargetView) { renderTargetView->Release(); }
-	if (renderResourceView) { renderResourceView->Release(); }
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+	{
+		if (renderTargetView[i]) { renderTargetView[i]->Release(); }
+		if (renderResourceView[i]) { renderResourceView[i]->Release(); }
+	}
 
 	// Resize the underlying swap chain buffers
 	swapChain->ResizeBuffers(
@@ -362,18 +374,20 @@ void DXCore::OnResize()
 
 	// Get the description of backBufferTexture and apply it to the renderTexture
 	D3D11_TEXTURE2D_DESC renderTexDesc;
-	ID3D11Texture2D* renderTexture = nullptr;
+	ID3D11Texture2D* renderTexture[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = { nullptr };
 	ZeroMemory(&renderTexDesc, sizeof(D3D11_TEXTURE2D_DESC));
 	backBufferTexture->GetDesc(&renderTexDesc);
 	renderTexDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
-	device->CreateTexture2D(&renderTexDesc, nullptr, &renderTexture);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateTexture2D(&renderTexDesc, nullptr, renderTexture + i);
 
 	// Create Render Target View with the renderTexture
-	device->CreateRenderTargetView(
-		renderTexture,
-		nullptr,
-		&renderTargetView
-	);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateRenderTargetView(
+			renderTexture[i],
+			nullptr,
+			renderTargetView + i
+		);
 
 	// Create Shader Resource View with the renderTexture
 	D3D11_SHADER_RESOURCE_VIEW_DESC renderSRVDesc;
@@ -382,14 +396,16 @@ void DXCore::OnResize()
 	renderSRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	renderSRVDesc.Texture2D.MipLevels = 1;
 
-	device->CreateShaderResourceView(
-		renderTexture,
-		&renderSRVDesc,
-		&renderResourceView
-	);
+	for (int i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		device->CreateShaderResourceView(
+			renderTexture[i],
+			&renderSRVDesc,
+			renderResourceView + i
+		);
 
 	// Release the render target texture because we don't need it anymore
-	renderTexture->Release();
+	for (auto& i : renderTexture)
+		i->Release();
 
 	// Set up the description of the texture to use for the depth buffer
 	D3D11_TEXTURE2D_DESC depthStencilDesc;

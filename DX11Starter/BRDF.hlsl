@@ -16,6 +16,18 @@ struct VertexToPixel
     float4 lViewSpacePos		: POSITION1;
 };
 
+struct PixelOutput
+{
+    float4 Target0 : SV_TARGET0;
+    float4 Target1 : SV_TARGET1;
+    float4 Target2 : SV_TARGET2;
+    float4 Target3 : SV_TARGET3;
+    float4 Target4 : SV_TARGET4;
+    float4 Target5 : SV_TARGET5;
+    float4 Target6 : SV_TARGET6;
+    float4 Target7 : SV_TARGET7;
+};
+
 struct Light
 {
     int Type;
@@ -307,8 +319,10 @@ void CalculatePCFPercentLit(in float4 shadowTexCoord,
     percentLit /= (float)blurRowSize;
 }
 
-float4 main(VertexToPixel input) : SV_TARGET
+PixelOutput main(VertexToPixel input)
 {
+    PixelOutput output;
+
     float3 v = normalize(float4(CameraPosition, 1.0f) - input.worldPos).xyz;
     float3 n = normalize(input.normal);
     float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
@@ -539,7 +553,15 @@ float4 main(VertexToPixel input) : SV_TARGET
 
     result = surfaceColor * diffuse + specular + float4(IBL(n, v, l), 0.0f);
     result.w = surfaceColor.w;
-    result = saturate(result);
-    return result;
+
+    output.Target0 = saturate(result);
+    output.Target1 = saturate(output.Target0 - float4(1.0f, 1.0f, 1.0f, 0.0f) * 0.5f);
+    output.Target2 = float4(0, 0, 0, 1);
+    output.Target3 = float4(0, 0, 0, 1);
+    output.Target4 = float4(0, 0, 0, 1);
+    output.Target5 = float4(0, 0, 0, 1);
+    output.Target6 = float4(0, 0, 0, 1);
+    output.Target7 = float4(0, 0, 0, 1);
+    return output;
     //return float4(v, 1.0);
 }

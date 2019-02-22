@@ -64,7 +64,7 @@ private:
 	DirectX::XMMATRIX view;
 	DirectX::XMMATRIX projection[3];
 
-	LightStructure* Data;
+	LightStructure* Data{};
 
 	// Bounding box
 	DirectX::XMVECTOR sceneAABBMin;

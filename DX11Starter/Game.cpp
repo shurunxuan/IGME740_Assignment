@@ -63,7 +63,11 @@ Game::~Game()
 	delete shadowVertexShader;
 	delete shadowPixelShader;
 	delete postProcessingVertexShader;
-	delete postProcessingPixelShader;
+	delete ppAddShader;
+	delete ppCopyShader;
+	delete ppDarkCornerShader;
+	delete ppGaussianBlurUShader;
+	delete ppGaussianBlurVShader;
 
 
 	if (drawingRenderState) { drawingRenderState->Release(); }
@@ -131,14 +135,26 @@ void Game::Init()
 	postProcessingVertexShader = new SimpleVertexShader(device, context);
 	postProcessingVertexShader->LoadShaderFile(L"PostProcessingVS.cso");
 
-	postProcessingPixelShader = new SimplePixelShader(device, context);
-	postProcessingPixelShader->LoadShaderFile(L"PostProcessingPS.cso");
+	ppAddShader = new SimplePixelShader(device, context);
+	ppAddShader->LoadShaderFile(L"PPAddPS.cso");
+
+	ppCopyShader = new SimplePixelShader(device, context);
+	ppCopyShader->LoadShaderFile(L"PPCopyPS.cso");
+
+	ppDarkCornerShader = new SimplePixelShader(device, context);
+	ppDarkCornerShader->LoadShaderFile(L"PPDarkCornerPS.cso");
+
+	ppGaussianBlurUShader = new SimplePixelShader(device, context);
+	ppGaussianBlurUShader->LoadShaderFile(L"PPGaussianBlurUPS.cso");
+
+	ppGaussianBlurVShader = new SimplePixelShader(device, context);
+	ppGaussianBlurVShader->LoadShaderFile(L"PPGaussianBlurVPS.cso");
 
 	BlinnPhongMaterial::GetDefault()->SetVertexShaderPtr(vertexShader);
 	BlinnPhongMaterial::GetDefault()->SetPixelShaderPtr(blinnPhongPixelShader);
 
 	entityCount = 2;
-	entities = new GameEntity * [entityCount];
+	entities = new GameEntity *[entityCount];
 
 	// Create GameEntity & Initial Transform
 	const auto modelData1 = Mesh::LoadFromFile("models\\Rock\\sphere.obj", device, context);
@@ -277,7 +293,7 @@ void Game::Init()
 	LOG_DEBUG << "AABB MAX: x = " << aabbMax.x << ", y = " << aabbMax.y << ", z = " << aabbMax.z << ", w = " << aabbMax.w << std::endl;
 
 	skyboxCount = 3;
-	skyboxes = new Skybox * [skyboxCount];
+	skyboxes = new Skybox *[skyboxCount];
 	skyboxes[0] = new Skybox(device, context, "models\\Skyboxes\\Environment2HiDef.cubemap.dds", "models\\Skyboxes\\Environment2Light.cubemap.dds");
 	skyboxes[1] = new Skybox(device, context, "models\\Skyboxes\\Environment3HiDef.cubemap.dds", "models\\Skyboxes\\Environment3Light.cubemap.dds");
 	skyboxes[2] = new Skybox(device, context, "models\\Skyboxes\\Environment1HiDef.cubemap.dds", "models\\Skyboxes\\Environment1Light.cubemap.dds");
@@ -289,7 +305,7 @@ void Game::Init()
 	}
 
 	// Initialize Light
-	lightCount = 3;
+	lightCount = 1;
 	lightData = new LightStructure[lightCount];
 
 	//lightData[0] = DirectionalLight(XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(-1.0f, 1.0f, 0.0f), 1.0f, XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -302,7 +318,7 @@ void Game::Init()
 	// Create FirstPersonCamera
 	camera = new FirstPersonCamera(float(width), float(height));
 
-	lights = new Light * [lightCount];
+	lights = new Light *[lightCount];
 
 	for (int i = 0; i < lightCount; ++i)
 	{
@@ -643,7 +659,8 @@ void Game::Draw(float deltaTime, float totalTime)
 	//  - Do this ONCE PER FRAME
 	//  - At the beginning of Draw (before drawing *anything*)
 	context->ClearRenderTargetView(backBufferRTV, color);
-	context->ClearRenderTargetView(renderTargetView, color);
+	for (auto& i : renderTargetView)
+		context->ClearRenderTargetView(i, color);
 	context->ClearDepthStencilView(
 		depthStencilView,
 		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
@@ -744,8 +761,7 @@ void Game::Draw(float deltaTime, float totalTime)
 
 	context->RSSetViewports(1, &viewport);
 	context->RSSetState(drawingRenderState);
-	context->OMSetRenderTargets(1, &renderTargetView, depthStencilView);
-	//context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
+	context->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, renderTargetView, depthStencilView);
 
 	for (int i = 0; i < entityCount; ++i)
 	{
@@ -965,32 +981,32 @@ void Game::Draw(float deltaTime, float totalTime)
 #pragma endregion 
 
 #pragma region PostProcessing
-	context->ClearDepthStencilView(
-		depthStencilView,
-		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
-		1.0f,
-		0);
-	// Render to screen
-	context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
-	// Set texture
-	postProcessingPixelShader->SetSamplerState("pointSampler", pointSamplerState);
-	postProcessingPixelShader->SetSamplerState("linearSampler", linearSamplerState);
-	postProcessingPixelShader->SetShaderResourceView("renderTexture", renderResourceView);
+	const float downScale = 0.2f;
+	// Downscale bright part
+	PostRenderCopy(1, 2, downScale, downScale);
 
-	// Copy all buffer data
-	postProcessingPixelShader->CopyAllBufferData();
-	postProcessingVertexShader->CopyAllBufferData();
+	// Gaussian blur of the bright part
+	std::vector<std::pair<std::string, std::pair<void*, unsigned>>> blurData(1);
+	// textureDimensions
+	XMFLOAT2 dimension = { float(width), float(height) };
+	blurData[0].first = "textureDimensions";
+	blurData[0].second.first = &dimension;
+	blurData[0].second.second = sizeof(dimension);
+	for (int i = 0; i < 1; ++i)
+	{
+		PostRender(2, 1, ppGaussianBlurVShader, blurData);
+		PostRender(1, 2, ppGaussianBlurUShader, blurData);
+	}
+	// Upscale bright part
+	PostRenderCopy(2, 1, 1.0f / downScale, 1.0f / downScale);
+	//PostRenderCopy(1, -1);
+	PostRenderAdd(0, 1, 2);
 
-	// Set shader
-	postProcessingVertexShader->SetShader();
-	postProcessingPixelShader->SetShader();
+	// Screen Dark Corner
+	PostRender(2, -1, ppDarkCornerShader);
 
-	// Draw
-	context->Draw(3, 0);
 
-	// Unbind texture
-	postProcessingPixelShader->SetShaderResourceView("renderTexture", nullptr);
 #pragma endregion 
 
 
@@ -998,6 +1014,102 @@ void Game::Draw(float deltaTime, float totalTime)
 	//  - Puts the final frame we're drawing into the window so the user can see it
 	//  - Do this exactly ONCE PER FRAME (always at the very end of the frame)
 	swapChain->Present(0, 0);
+}
+
+void Game::PostRender(int resourceIndex, int targetIndex, SimplePixelShader* pixelShader, const std::vector<std::pair<std::string, std::pair<void*, unsigned>>>& data)
+{
+	ID3D11ShaderResourceView* resourceView = renderResourceView[resourceIndex];
+	ID3D11RenderTargetView* targetView;
+	if (targetIndex < 0)
+		targetView = backBufferRTV;
+	else
+		targetView = renderTargetView[targetIndex];
+	// TODO: Change this to individual depth stencil view if needed
+	context->ClearDepthStencilView(
+		depthStencilView,
+		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+		1.0f,
+		0);
+	// Render to target
+	context->OMSetRenderTargets(1, &targetView, depthStencilView);
+
+	// Set data
+	for (auto& d : data)
+	{
+		pixelShader->SetData(d.first, d.second.first, d.second.second);
+	}
+
+	// Set texture
+	pixelShader->SetSamplerState("pointSampler", pointSamplerState);
+	pixelShader->SetSamplerState("linearSampler", linearSamplerState);
+	pixelShader->SetShaderResourceView("renderTexture", resourceView);
+
+	// Copy all buffer data
+	pixelShader->CopyAllBufferData();
+	postProcessingVertexShader->CopyAllBufferData();
+
+	// Set shader
+	postProcessingVertexShader->SetShader();
+	pixelShader->SetShader();
+
+	// Draw
+	context->Draw(3, 0);
+
+	// Unbind texture
+	pixelShader->SetShaderResourceView("renderTexture", nullptr);
+}
+
+void Game::PostRenderAdd(int resourceIndex0, int resourceIndex1, int targetIndex)
+{
+	ID3D11ShaderResourceView* resourceView0 = renderResourceView[resourceIndex0];
+	ID3D11ShaderResourceView* resourceView1 = renderResourceView[resourceIndex1];
+	ID3D11RenderTargetView* targetView;
+	if (targetIndex < 0)
+		targetView = backBufferRTV;
+	else
+		targetView = renderTargetView[targetIndex];
+	// TODO: Change this to individual depth stencil view if needed
+	context->ClearDepthStencilView(
+		depthStencilView,
+		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+		1.0f,
+		0);
+	// Render to target
+	context->OMSetRenderTargets(1, &targetView, depthStencilView);
+
+	// Set texture
+	ppAddShader->SetSamplerState("pointSampler", pointSamplerState);
+	ppAddShader->SetSamplerState("linearSampler", linearSamplerState);
+	ppAddShader->SetShaderResourceView("renderTexture0", resourceView0);
+	ppAddShader->SetShaderResourceView("renderTexture1", resourceView1);
+
+	// Copy all buffer data
+	ppAddShader->CopyAllBufferData();
+	postProcessingVertexShader->CopyAllBufferData();
+
+	// Set shader
+	postProcessingVertexShader->SetShader();
+	ppAddShader->SetShader();
+
+	// Draw
+	context->Draw(3, 0);
+
+	// Unbind texture
+	ppAddShader->SetShaderResourceView("renderTexture0", nullptr);
+	ppAddShader->SetShaderResourceView("renderTexture1", nullptr);
+}
+
+void Game::PostRenderCopy(int resourceIndex, int targetIndex, float xScale, float yScale)
+{
+	// Gaussian blur of the bright part
+	std::vector<std::pair<std::string, std::pair<void*, unsigned>>> scaleData(1);
+	// textureDimensions
+	XMFLOAT2 scale = { xScale, yScale };
+	scaleData[0].first = "scale";
+	scaleData[0].second.first = &scale;
+	scaleData[0].second.second = sizeof(scale);
+
+	PostRender(resourceIndex, targetIndex, ppCopyShader, scaleData);
 }
 
 
