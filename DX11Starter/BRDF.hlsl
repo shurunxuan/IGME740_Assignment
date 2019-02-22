@@ -16,6 +16,18 @@ struct VertexToPixel
     float4 lViewSpacePos		: POSITION1;
 };
 
+struct PixelOutput
+{
+    float4 Target0 : SV_TARGET0;
+    float4 Target1 : SV_TARGET1;
+    float4 Target2 : SV_TARGET2;
+    float4 Target3 : SV_TARGET3;
+    float4 Target4 : SV_TARGET4;
+    float4 Target5 : SV_TARGET5;
+    float4 Target6 : SV_TARGET6;
+    float4 Target7 : SV_TARGET7;
+};
+
 struct Light
 {
     int Type;
@@ -142,7 +154,7 @@ float4 FresnelSchlick(float4 f0, float fd90, float view)
     return f0 + (fd90 - f0) * pow(max(1.0f - view, 0.1f), 5.0f);
 }
 
-float3 IBL(float3 n, float3 v, float3 l)
+float3 IBL(float3 n, float3 v, float3 l, float3 surfaceColor)
 {
     float3 r = normalize(reflect(-v, n));
     float NdV = max(dot(n, v), 0.0);
@@ -158,8 +170,9 @@ float3 IBL(float3 n, float3 v, float3 l)
     float4 specularColor = float4(lerp(0.04f.rrr, material.albedo, material.metalness), 1.0f);
     float4 schlickFresnel = saturate(FresnelSchlick(specularColor, 1.0f, NdV));
 
-    float3 diffuseResult = diffuseImageLighting * material.albedo;
-    float3 result = lerp(diffuseResult, specularImageLighting * material.albedo, schlickFresnel.xyz);
+    float3 albedo = material.albedo * surfaceColor;
+
+    float3 result = lerp(diffuseImageLighting * albedo, specularImageLighting * albedo, schlickFresnel.xyz);
     //float3 result = specularImageLighting * material.albedo;
 
     return result;
@@ -307,8 +320,10 @@ void CalculatePCFPercentLit(in float4 shadowTexCoord,
     percentLit /= (float)blurRowSize;
 }
 
-float4 main(VertexToPixel input) : SV_TARGET
+PixelOutput main(VertexToPixel input)
 {
+    PixelOutput output;
+
     float3 v = normalize(float4(CameraPosition, 1.0f) - input.worldPos).xyz;
     float3 n = normalize(input.normal);
     float3 t = normalize(input.tangent - dot(input.tangent, n) * n);
@@ -537,9 +552,17 @@ float4 main(VertexToPixel input) : SV_TARGET
 
     }
 
-    result = surfaceColor * diffuse + specular + float4(IBL(n, v, l), 0.0f);
+    result = surfaceColor * diffuse + specular + float4(IBL(n, v, l, surfaceColor.rgb), 0.0f);
     result.w = surfaceColor.w;
-    result = saturate(result);
-    return result;
+
+    output.Target0 = saturate(result);
+    output.Target1 = saturate(output.Target0 - float4(1.0f, 1.0f, 1.0f, 0.0f) * 0.5f);
+    output.Target2 = float4(0, 0, 0, 1);
+    output.Target3 = float4(0, 0, 0, 1);
+    output.Target4 = float4(0, 0, 0, 1);
+    output.Target5 = float4(0, 0, 0, 1);
+    output.Target6 = float4(0, 0, 0, 1);
+    output.Target7 = float4(0, 0, 0, 1);
+    return output;
     //return float4(v, 1.0);
 }

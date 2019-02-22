@@ -69,6 +69,12 @@ protected:
 	ID3D11RenderTargetView* backBufferRTV;
 	ID3D11DepthStencilView* depthStencilView;
 
+	// Render target before post-processing
+	ID3D11RenderTargetView* renderTargetView[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+	ID3D11ShaderResourceView* renderResourceView[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+	ID3D11SamplerState* pointSamplerState;
+	ID3D11SamplerState* linearSamplerState;
+
 	// Helper function for allocating a console window
 	void CreateConsoleWindow(int bufferLines, int bufferColumns, int windowLines, int windowColumns);
 
