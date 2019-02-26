@@ -459,7 +459,7 @@ void Game::Update(float deltaTime, float totalTime)
 	{
 		XMFLOAT3 yAxis = { 0.0f, 1.0f, 0.0f };
 		XMVECTOR yVec = XMLoadFloat3(&yAxis);
-		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime);
+		XMVECTOR rotateQ = XMQuaternionRotationAxis(yVec, deltaTime / 5.0f);
 		XMVECTOR lightDirection = XMLoadFloat3(&lightData[0].Direction);
 		lightDirection = XMVector3Rotate(lightDirection, rotateQ);
 		XMFLOAT3 newLightDirection{};
@@ -1016,6 +1016,8 @@ void Game::Draw(float deltaTime, float totalTime)
 	//  - Puts the final frame we're drawing into the window so the user can see it
 	//  - Do this exactly ONCE PER FRAME (always at the very end of the frame)
 	swapChain->Present(0, 0);
+
+	context->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, renderTargetView, depthStencilView);
 }
 
 void Game::PostRender(int resourceIndex, int targetIndex, SimplePixelShader* pixelShader, const std::vector<std::pair<std::string, std::pair<void*, unsigned>>>& data)

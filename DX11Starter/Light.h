@@ -7,7 +7,7 @@
 #define LIGHT_TYPE_POINT 1
 #define LIGHT_TYPE_SPOT 2
 
-#define PCF_BLUR_COUNT 3
+#define PCF_BLUR_COUNT 1
 
 struct LightStructure
 {
